@@ -1,0 +1,317 @@
+/**
+ * Rendering (spec §5, §6).
+ *
+ * Wording rules that this file follows: errors state what happened and what to
+ * do, without apologising; an unknown time is a three-pillar chart, not a
+ * failure; anything that could not be computed is left blank rather than
+ * filled with a plausible number.
+ */
+
+import { calendarDate } from '../engine/swe.js';
+import { naturalFrequency } from '../engine/uncertainty.js';
+
+const PILLAR_LABELS = [['year', '年'], ['month', '月'], ['day', '日'], ['hour', '時']];
+
+export const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+export function el(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
+/** JST wall-clock rendering of a UT Julian Day. */
+export function formatJst(jd, withSeconds = false) {
+  const d = calendarDate(jd + 9 / 24);
+  const h = Math.floor(d.hour);
+  const minFloat = (d.hour - h) * 60;
+  let m = withSeconds ? Math.floor(minFloat) : Math.round(minFloat);
+  let hh = h;
+  let s = Math.round((minFloat - Math.floor(minFloat)) * 60);
+  if (s === 60) { s = 0; m += 1; }
+  if (m === 60) { m = 0; hh += 1; }
+  const date = `${d.year}-${String(d.month).padStart(2, '0')}-${String(d.day).padStart(2, '0')}`;
+  const time = withSeconds
+    ? `${String(hh).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+    : `${String(hh).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  return `${date} ${time}`;
+}
+
+export function signedMinutes(value, digits = 1) {
+  const sign = value >= 0 ? '+' : '−';
+  return `${sign}${Math.abs(value).toFixed(digits)}分`;
+}
+
+/** A span of time in plain Japanese, for the "17 minutes before" line. */
+export function describeSpan(minutes) {
+  const abs = Math.abs(minutes);
+  if (abs < 60) return `${abs.toFixed(0)}分`;
+  if (abs < 1440) {
+    const h = Math.floor(abs / 60);
+    const m = Math.round(abs - h * 60);
+    return m === 0 ? `${h}時間` : `${h}時間${m}分`;
+  }
+  const days = Math.floor(abs / 1440);
+  const hours = Math.round((abs - days * 1440) / 60);
+  return hours === 0 ? `${days}日` : `${days}日${hours}時間`;
+}
+
+/* --- the chart ----------------------------------------------------------- */
+
+function glyph(char, element) {
+  const node = el('span', `glyph ${element}`, char);
+  node.dataset.char = char;
+  return node;
+}
+
+export function buildChartElement(chart) {
+  const wrap = el('div', 'chart');
+  for (const [key, label] of PILLAR_LABELS) {
+    const p = chart.pillars[key];
+    const column = el('div', 'pillar');
+    column.dataset.pillar = key;
+    column.append(el('div', 'pillar-label', label));
+    const glyphs = el('div', 'pillar-glyphs');
+    if (p) {
+      glyphs.append(glyph(p.stemChar, p.stemElement));
+      glyphs.append(glyph(p.branchChar, p.branchElement));
+    } else {
+      // Nothing is invented to fill the hour column.
+      glyphs.append(el('div', 'pillar-empty', '—'));
+    }
+    column.append(glyphs);
+    wrap.append(column);
+  }
+  return wrap;
+}
+
+/**
+ * Update an existing chart in place, animating only the characters that
+ * actually change (spec §5.4: motion is spent here and nowhere else).
+ */
+export function updateChartElement(root, chart) {
+  const changed = [];
+  const instant = reducedMotion();
+
+  for (const [key] of PILLAR_LABELS) {
+    const column = root.querySelector(`[data-pillar="${key}"]`);
+    const p = chart.pillars[key];
+    const glyphs = [...column.querySelectorAll('.glyph')];
+    const next = p ? [[p.stemChar, p.stemElement], [p.branchChar, p.branchElement]] : [];
+    if (!p || glyphs.length !== next.length) continue;
+
+    let columnChanged = false;
+    glyphs.forEach((node, i) => {
+      const [char, element] = next[i];
+      if (node.dataset.char === char) return;
+      columnChanged = true;
+      const apply = () => {
+        node.textContent = char;
+        node.dataset.char = char;
+        node.className = `glyph ${element}`;
+        if (!instant) {
+          node.classList.add('is-entering');
+          node.addEventListener('animationend', () => node.classList.remove('is-entering'), { once: true });
+        }
+      };
+      if (instant) { apply(); return; }
+      node.classList.add('is-leaving');
+      node.addEventListener('animationend', () => {
+        node.classList.remove('is-leaving');
+        apply();
+      }, { once: true });
+    });
+    if (columnChanged) changed.push(key);
+  }
+  return changed;
+}
+
+/* --- certainty (§2.5) ---------------------------------------------------- */
+
+const PILLAR_NAME = { year: '年柱', month: '月柱', day: '日柱', hour: '時柱' };
+
+export function buildStateElement(resolution) {
+  const box = el('div', `state ${resolution.state}`);
+
+  if (resolution.state === 'determinate') {
+    box.append(el('p', 'state-title', '確定'));
+    const body = el('p', 'state-body');
+    body.append(document.createTextNode('±'));
+    body.append(el('span', 'mono', String(resolution.minutes)));
+    body.append(document.createTextNode('分の幅の中に、柱が変わる境界はない。'));
+    box.append(body);
+    return box;
+  }
+
+  if (resolution.state === 'unknown') {
+    box.append(el('p', 'state-title', '時刻不明 — 三柱'));
+    const body = el('p', 'state-body',
+      '時柱は計算していない。年柱・月柱・日柱の三柱で成立している。');
+    box.append(body);
+    if (resolution.outcomes.length > 1) {
+      body.textContent += ' ただしこの日は節入りをまたぐため、月柱（あるいは年柱）は時刻によって変わる。';
+      box.append(buildParallel(resolution));
+    }
+    return box;
+  }
+
+  box.append(el('p', 'state-title', '境界近傍 — 未確定'));
+  const kinds = [...new Set(resolution.boundaries.map((b) => b.label))].join('、');
+  const body = el('p', 'state-body');
+  body.append(document.createTextNode('±'));
+  body.append(el('span', 'mono', String(resolution.minutes)));
+  body.append(document.createTextNode(`分の幅が ${kinds} をまたぐ。どちらかは、この記録からは決まらない。`));
+  box.append(body);
+  box.append(buildParallel(resolution));
+  return box;
+}
+
+/** Both charts, side by side, with the share of the window each occupies. */
+function buildParallel(resolution) {
+  const list = el('div', 'parallel');
+  const base = resolution.outcomes[0];
+
+  for (const outcome of resolution.outcomes) {
+    const item = el('div', 'parallel-item');
+    const head = el('div', 'parallel-head');
+
+    const differing = PILLAR_LABELS
+      .filter(([key]) => {
+        const a = base.chart.pillars[key];
+        const b = outcome.chart.pillars[key];
+        return (a ? a.text : '—') !== (b ? b.text : '—');
+      })
+      .map(([key]) => PILLAR_NAME[key]);
+
+    head.append(el('span', null, differing.length ? differing.join('・') : '同じ命式'));
+    head.append(el('span', 'parallel-share',
+      `幅のうち ${naturalFrequency(outcome.fraction)}`));
+    item.append(head);
+
+    const text = PILLAR_LABELS
+      .map(([key]) => (outcome.chart.pillars[key] ? outcome.chart.pillars[key].text : '—'))
+      .join(' ');
+    item.append(el('div', 'parallel-pillars', text));
+    list.append(item);
+  }
+  return list;
+}
+
+/* --- solar term register (§5.1: 朱 is spent only on ingress times) -------- */
+
+export function buildTermElement(chart) {
+  const section = el('section', 'section');
+  section.append(el('h2', null, '節入り'));
+
+  const { period } = chart.pillars;
+  const table = el('table');
+  const body = el('tbody');
+
+  const rows = [
+    [`${period.term.name}（黄経 ${period.term.longitude}°）`, formatJst(period.start, true), true],
+    ['この命式の月支', period.term.name === '' ? '' : chart.pillars.month.branchChar, false],
+    [`${period.next.name}（黄経 ${period.next.longitude}°）`, formatJst(period.end, true), true],
+    ['出生時の太陽黄経', `${period.longitude.toFixed(4)}°`, false],
+    ['立春（年柱の境）', formatJst(chart.pillars.risshun, true), true],
+  ];
+
+  for (const [label, value, cinnabar] of rows) {
+    const tr = el('tr');
+    tr.append(el('th', null, label));
+    const td = el('td', cinnabar ? 'num ingress' : 'num');
+    td.textContent = value;
+    tr.append(td);
+    body.append(tr);
+  }
+  table.append(body);
+  section.append(table);
+
+  // The evocative fact, when there is one: proximity to an ingress reads well
+  // and is honest — the error bar is information, not a weakness.
+  const beforeNext = (period.end - chart.time.ut) * 1440;
+  const afterStart = (chart.time.ut - period.start) * 1440;
+  const nearest = Math.min(beforeNext, afterStart);
+  if (nearest < 1440) {
+    const isBefore = beforeNext <= afterStart;
+    const line = el('p', 'hint');
+    line.textContent = isBefore
+      ? `あなたの誕生は、${period.next.name}の${describeSpan(beforeNext)}前。`
+      : `あなたの誕生は、${period.term.name}の${describeSpan(afterStart)}後。`;
+    section.append(line);
+  }
+  return section;
+}
+
+/* --- axes (§4.2) --------------------------------------------------------- */
+
+export function buildAxesElement(analysis) {
+  const section = el('section', 'section');
+  section.append(el('h2', null, '流派で割れる軸'));
+
+  for (const entry of analysis) {
+    const details = el('details', `axis ${entry.changes ? 'live' : 'stable'}`);
+    const summary = el('summary', 'axis-summary');
+    summary.append(el('span', 'axis-name', entry.axis.label));
+    summary.append(el('span', 'axis-state',
+      entry.changes ? '命式が変わる' : '変わらない'));
+    details.append(summary);
+
+    const detail = el('div', 'axis-detail');
+    if (!entry.changes) {
+      detail.append(el('p', 'hint', 'この軸では、あなたの命式は変わりません。'));
+    } else {
+      for (const alt of entry.alternatives) {
+        const block = el('div', 'axis-option');
+        block.append(el('div', 'axis-option-name',
+          `${alt.option.label}（${alt.option.note}）にすると`));
+        if (alt.changed.length === 0) {
+          block.append(el('div', 'hint', 'この組み合わせでは変わらない。'));
+        } else {
+          for (const change of alt.changed) {
+            const row = el('div', 'axis-change');
+            row.append(el('span', 'axis-option-name', `${change.label} `));
+            row.append(el('span', 'from', change.from));
+            row.append(el('span', 'arrow', '→'));
+            row.append(el('span', 'to', change.to));
+            block.append(row);
+          }
+        }
+        detail.append(block);
+      }
+      details.open = true;
+    }
+    details.append(detail);
+    section.append(details);
+  }
+  return section;
+}
+
+/* --- error budget (§2.6) ------------------------------------------------- */
+
+export function buildBudgetElement(chart, precisionMinutes, deltaT) {
+  const section = el('section', 'section');
+  section.append(el('h2', null, '誤差予算'));
+
+  const table = el('table');
+  const body = el('tbody');
+  const rows = [
+    ['天体暦の精度', '秒角未満', false],
+    ['ΔT', `${deltaT.toFixed(0)} 秒`, false],
+    ['均時差', `${signedMinutes(chart.time.equationMinutes, 1)}（補正済み）`, false],
+    ['地方時差', `${signedMinutes(chart.time.meridianMinutes, 1)}（補正済み）`, false],
+    ['出生時刻の記録精度',
+      precisionMinutes === null ? '不明' : `±${precisionMinutes} 分`, true],
+  ];
+  for (const [label, value, dominant] of rows) {
+    const tr = el('tr', dominant ? 'dominant' : null);
+    tr.append(el('th', null, label));
+    tr.append(el('td', 'num', value));
+    body.append(tr);
+  }
+  table.append(body);
+  section.append(table);
+  section.append(el('p', 'hint',
+    '支配的な誤差は人間の側にある。天文計算をどれだけ磨いても、母子手帳の分解能は超えられない。'));
+  return section;
+}
