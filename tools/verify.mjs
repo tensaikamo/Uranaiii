@@ -14,19 +14,18 @@ import SwissEph from '../vendor/swisseph-wasm/src/swisseph.js';
 import { initEphemeris, ephemerisVersion, sunLongitude, equationOfTime, sunCrossing, julianDay, calendarDate, deltaTSeconds, withinEphemeris, EPHEMERIS_YEARS } from '../app/engine/swe.js';
 import { buildChart, buildChartAtOffset, DEFAULT_AXES } from '../app/engine/chart.js';
 import { resolveUncertainty } from '../app/engine/uncertainty.js';
-import { readChart, readingSignature } from '../app/engine/reading.js';
+import { readChart, readingSignature, summarise } from '../app/engine/reading.js';
 import { voiceStatements } from '../app/engine/voice.js';
 import { strokesOf } from '../app/engine/strokes.js';
 import { fiveGrids, elementOfCount } from '../app/engine/name.js';
-import { luckDirection, luckPeriods, luckOnset } from '../app/engine/luck.js';
+import { luckDirection, luckPeriods, luckOnset, ageNow, ageExact, cycleAtAge } from '../app/engine/luck.js';
 import { hiddenStems, hiddenTable, TRIADS, NO_MIDDLE } from '../app/engine/hidden.js';
 import { timeline } from '../app/engine/timeline.js';
-import { judgeBoth } from '../app/engine/strength.js';
-import { judgeStrength } from '../app/engine/strength.js';
+import { judgeStrength, judgeBoth } from '../app/engine/strength.js';
 import { frequencyOf } from '../app/engine/rarity.js';
 import { trueTermPeriod, meanTermPeriod, degreesSinceRisshun, termPeriod, termIngresses, SETSU } from '../app/engine/terms.js';
 import { computePillars, TIGER_MONTH_STEM, RAT_HOUR_STEM, DAY_PILLAR_OFFSET, pillarFromIndex, STEMS, BRANCHES, STEM_ELEMENT } from '../app/engine/pillars.js';
-import { japanOffsetHours } from '../app/engine/time.js';
+import { japanOffsetHours, japanNow } from '../app/engine/time.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const results = [];
@@ -789,6 +788,79 @@ const DAY_PILLARS = [
   record('時の欄', 'the 10-year row is omitted when no sex was given',
     !t.rows.some((r) => r.scale === '10年'),
     `rows: ${t.rows.map((r) => r.scale).join('・')}`);
+}
+
+// --- consistency between the two pages --------------------------------------
+// Both pages must reach the same verdict. They briefly did not: the board page
+// judged without 蔵干 and the 語り page judged with it, so the same birth data
+// was told "身弱, lean on 火と土" on one page and "中庸, lean on 金" on the
+// other — opposite advice from one app.
+{
+  const cases = [
+    [1990, 6, 15, 6, 20], [2000, 1, 1, 3, 0], [1984, 2, 2, 12, 0], [1955, 8, 15, 20, 0],
+  ];
+  const mismatched = [];
+  for (const [y, m, d, h, mi] of cases) {
+    const input = { year: y, month: m, day: d, hour: h, minute: mi, precision: 'pm5', longitude: 141.79 };
+    const chart = buildChart(input, DEFAULT_AXES);
+    const board = summarise(chart);
+    const voice = judgeBoth(chart.pillars);
+    if (board.strength.verdict !== voice.verdict
+      || board.strength.needed.join() !== voice.needed.join()) {
+      mismatched.push(`${y}-${m}-${d}: 盤 ${board.strength.label} vs 語り ${voice.label}`);
+    }
+  }
+  record('consistency', 'the board page and the 語り page reach the same verdict',
+    mismatched.length === 0,
+    mismatched.length === 0 ? `${cases.length}/${cases.length} charts agree on both 判定 and 用神` : mismatched.join('; '));
+}
+
+// --- "now" is reckoned in Japan, not on the device ---------------------------
+// The app is declared domestic, so the device's timezone must not decide what
+// day it is. Read off a local Date, today's pillar is a day out for anyone
+// abroad — and the daily fortune is the part people open every day.
+{
+  const input = { year: 1990, month: 6, day: 15, hour: 6, minute: 20, precision: 'pm5', longitude: 141.79 };
+  const chart = buildChart(input, DEFAULT_AXES);
+  const strength = judgeBoth(chart.pillars);
+
+  // 02:00 JST on 29 July is still 28 July in New York and 27 July in Honolulu.
+  const instant = new Date('2026-07-29T02:00:00+09:00');
+  const jst = japanNow(instant);
+  const t = timeline(input, strength, null, instant);
+  const today = t.rows.find((r) => r.scale === '今日');
+  record('now in Japan', "today's pillar is the Japanese day, not the device's",
+    jst.day === 29 && jst.month === 7 && today.pillar.text === '甲辰' && today.when === '7月29日',
+    `JST ${jst.month}/${jst.day} → ${today.when} ${today.pillar.text}`);
+
+  // A birthday must turn over at Japanese midnight, not UTC midnight.
+  const onBirthday = new Date('2026-06-15T00:30:00+09:00');
+  const dayBefore = new Date('2026-06-14T23:30:00+09:00');
+  record('now in Japan', 'age turns over at Japanese midnight',
+    ageNow(input, onBirthday) === 36 && ageNow(input, dayBefore) === 35,
+    `6/15 00:30 JST → ${ageNow(input, onBirthday)}歳、6/14 23:30 JST → ${ageNow(input, dayBefore)}歳`);
+}
+
+// --- 立運 months are not rounded away ---------------------------------------
+// 立運 of "7歳6ヶ月" rounded down to 7 puts a seven-year-old inside a cycle
+// that has not started, wrong by up to a year at the one boundary a reader is
+// most likely to be sitting on.
+{
+  const input = { year: 1990, month: 6, day: 15, hour: 6, minute: 20, precision: 'pm5', longitude: 141.79 };
+  const chart = buildChart(input, DEFAULT_AXES);
+  const strength = judgeBoth(chart.pillars);
+  const luck = luckPeriods(chart, strength, 'male');
+  const before = cycleAtAge(luck, luck.onset.years + 0.1);
+  const after = cycleAtAge(luck, luck.onset.years + luck.onset.months / 12 + 0.1);
+  record('大運', '立運 months count toward the first cycle boundary',
+    luck.onset.months > 0 && before === null && after === luck.periods[0],
+    `立運 ${luck.onset.years}歳${luck.onset.months}ヶ月: ${luck.onset.years}.1歳=まだ、`
+    + `${(luck.onset.years + luck.onset.months / 12).toFixed(1)}歳=第1期`);
+
+  record('大運', 'ageExact and ageNow agree on whole years',
+    Math.floor(ageExact(input, new Date('2026-07-29T12:00:00+09:00')))
+      === ageNow(input, new Date('2026-07-29T12:00:00+09:00')),
+    `${ageExact(input, new Date('2026-07-29T12:00:00+09:00')).toFixed(2)} → ${ageNow(input, new Date('2026-07-29T12:00:00+09:00'))}歳`);
 }
 
 // --- report -----------------------------------------------------------------

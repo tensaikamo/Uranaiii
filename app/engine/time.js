@@ -67,6 +67,28 @@ export function japanOffsetHours(wallJd) {
   return { offsetHours: 9, daylightSaving: false, ambiguous: false };
 }
 
+/**
+ * A moment as Japanese civil time, whatever the device's timezone is.
+ *
+ * Every "now" in this app — today's pillar, the current age, the solar year in
+ * progress — has to be reckoned in Japan, because that is the timezone the whole
+ * engine is declared against. Reading `getFullYear()` off a Date instead makes
+ * the daily fortune a day out for anyone abroad, and the app would quietly
+ * disagree with itself about what day it is.
+ *
+ * JST has been a flat UTC+9 since 1951, so the arithmetic is a fixed shift.
+ */
+export function japanNow(date = new Date()) {
+  const shifted = new Date(date.getTime() + 9 * 3600 * 1000);
+  return {
+    year: shifted.getUTCFullYear(),
+    month: shifted.getUTCMonth() + 1,
+    day: shifted.getUTCDate(),
+    hour: shifted.getUTCHours(),
+    minute: shifted.getUTCMinutes(),
+  };
+}
+
 /** Local mean time offset from UT, in days, for a given longitude. */
 export function localMeanOffsetDays(longitudeDeg) {
   return longitudeDeg / 360;

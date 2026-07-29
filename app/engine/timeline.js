@@ -16,8 +16,9 @@
 
 import { buildChart, DEFAULT_AXES } from './chart.js';
 import { yearFit } from './strength.js';
-import { cycleAtAge, ageNow } from './luck.js';
+import { cycleAtAge, ageExact } from './luck.js';
 import { ELEMENT_PLAIN } from './plainwords.js';
+import { japanNow } from './time.js';
 
 const FIT_LABEL = { needed: '追い風', avoided: '向かい風', neutral: '平' };
 
@@ -29,20 +30,15 @@ const FIT_LABEL = { needed: '追い風', avoided: '向かい風', neutral: '平'
 export function timeline(input, strength, luck, now = new Date()) {
   // "Now" as a chart, at the same longitude, so the boundaries match the natal
   // reading rather than the civil calendar.
+  const jst = japanNow(now);
   const nowChart = buildChart({
-    year: now.getFullYear(),
-    month: now.getMonth() + 1,
-    day: now.getDate(),
-    hour: now.getHours(),
-    minute: now.getMinutes(),
-    precision: 'pm5',
-    longitude: input.longitude,
+    ...jst, precision: 'pm5', longitude: input.longitude,
   }, DEFAULT_AXES);
 
   const rows = [];
 
   if (luck) {
-    const age = ageNow(input, now);
+    const age = ageExact(input, now);
     const current = cycleAtAge(luck, age);
     if (current) {
       rows.push({
@@ -58,7 +54,7 @@ export function timeline(input, strength, luck, now = new Date()) {
   for (const [scale, when, pillar] of [
     ['今年', `${nowChart.pillars.solarYear}年`, nowChart.pillars.year],
     ['今月', `${nowChart.pillars.period.term.name}から`, nowChart.pillars.month],
-    ['今日', `${now.getMonth() + 1}月${now.getDate()}日`, nowChart.pillars.day],
+    ['今日', `${jst.month}月${jst.day}日`, nowChart.pillars.day],
   ]) {
     rows.push({
       scale,

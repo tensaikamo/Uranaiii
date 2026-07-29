@@ -27,6 +27,7 @@
  */
 
 import { pillarFromIndex } from './pillars.js';
+import { japanNow } from './time.js';
 
 /** Yang stems are the even indices: 甲丙戊庚壬. */
 const isYangStem = (stemIndex) => stemIndex % 2 === 0;
@@ -110,23 +111,37 @@ export function luckPeriods(chart, strength, sex, count = 9) {
 }
 
 /**
- * Which cycle a given age falls in.
- * Ages before the first cycle starts belong to none of them — that stretch is
- * read from the natal chart alone, and saying so is more honest than stretching
- * the first cycle backwards to cover it.
+ * Which cycle an age falls in.
+ *
+ * The comparison is against `fromAge + fromMonths/12`, not `fromAge`. 立運 is
+ * "7歳6ヶ月", and rounding that down to 7 puts a seven-year-old inside a cycle
+ * that has not started yet — wrong by up to a year at the one boundary a reader
+ * is most likely to be sitting on.
+ *
+ * Ages before the first cycle belong to none of them. Saying so is more honest
+ * than stretching the first cycle backwards to cover the gap.
  */
-export function cycleAtAge(luck, age) {
+export function cycleAtAge(luck, exactAge) {
   if (!luck) return null;
-  return luck.periods.find((p) => age >= p.fromAge && age < p.toAge) || null;
+  return luck.periods.find((p) => {
+    const from = p.fromAge + (p.fromMonths || 0) / 12;
+    return exactAge >= from && exactAge < from + 10;
+  }) || null;
 }
 
-/** Age today, from the birth date. Whole years. */
+/** Age today in whole years, reckoned in Japan. */
 export function ageNow(input, now = new Date()) {
-  const birth = new Date(Date.UTC(input.year, input.month - 1, input.day));
-  const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-  let age = today.getUTCFullYear() - birth.getUTCFullYear();
-  const beforeBirthday = today.getUTCMonth() < birth.getUTCMonth()
-    || (today.getUTCMonth() === birth.getUTCMonth() && today.getUTCDate() < birth.getUTCDate());
-  if (beforeBirthday) age -= 1;
-  return age;
+  return Math.floor(ageExact(input, now));
+}
+
+/**
+ * Age as a fraction of a year, reckoned in Japan.
+ * Both dates are taken in Japanese civil terms; mixing a JST birth date with a
+ * UTC "today" moves every birthday by a day.
+ */
+export function ageExact(input, now = new Date()) {
+  const today = japanNow(now);
+  const days = Date.UTC(today.year, today.month - 1, today.day)
+    - Date.UTC(input.year, input.month - 1, input.day);
+  return days / 86400000 / 365.2425;
 }

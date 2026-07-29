@@ -34,7 +34,7 @@
 
 import { ELEMENTS, ELEMENT_NAMES, elementBalance } from './pillars.js';
 import { frequencyOf } from './rarity.js';
-import { judgeStrength } from './strength.js';
+import { judgeBoth } from './strength.js';
 
 /** 相生 — each element generates the next. */
 const GENERATES = { wood: 'fire', fire: 'earth', earth: 'metal', metal: 'water', water: 'wood' };
@@ -87,10 +87,11 @@ function say({ text, source, group, key }) {
  * derived from the board and every term of the arithmetic can be cited.
  */
 function ruleVerdict(chart) {
-  const s = judgeStrength(chart.pillars);
-  const near = s.margin < 1
-    ? `境目まで ${s.margin} しかないので、流派によっては逆の判定になる。`
-    : '';
+  const s = judgeBoth(chart.pillars);
+  // Same 蔵干 treatment as the 語り page, so the two never contradict.
+  const near = !s.agrees
+    ? `蔵干を数えないと ${s.alternative.label}（${s.alternative.score}）で、流派により逆に振れる。`
+    : s.margin < 1 ? `境目まで ${s.margin} しかない。` : '';
   return [say({
     text: `8文字それぞれが日主を助けるか削るかを数えると ${s.score > 0 ? '+' : ''}${s.score} で、${s.label}。`
       + `この人に効く五行は ${s.needed.map(el).join('・')}、消耗しやすいのは ${s.avoided.map(el).join('・')}。${near}`,
@@ -313,7 +314,7 @@ export function readChart(chart) {
 export function summarise(chart) {
   const day = chart.pillars.day;
   const month = chart.pillars.month;
-  const s = judgeStrength(chart.pillars);
+  const s = judgeBoth(chart.pillars);
   return {
     text: `${el(day.stemElement)}の人が${el(month.branchElement)}の季節に生まれて、${s.label}。効くのは ${s.needed.map(el).join('と')}。`,
     source: [`day_stem:${day.stemChar}`, `month_branch:${month.branchChar}`, `judgement:${s.label}`],

@@ -250,8 +250,10 @@ function render(input) {
     const list = el('div', 'luck');
     for (const p of v.luck.luck.periods) {
       const row = el('div', `luck-row is-${p.fit}${p === v.luck.current ? ' is-now' : ''}`);
+      // The first cycle starts mid-year; showing "7〜17歳" when it is really
+      // 7歳6ヶ月 misplaces the one boundary a reader is likely to be on.
       row.append(el('span', 'luck-age',
-        `${p.fromAge}〜${p.toAge}歳`));
+        p.fromMonths ? `${p.fromAge}歳${p.fromMonths}ヶ月〜` : `${p.fromAge}〜${p.toAge}歳`));
       row.append(el('span', 'luck-pillar', p.pillar.text));
       row.append(el('span', 'luck-fit',
         { needed: '追い風', avoided: '向かい風', neutral: '平' }[p.fit]));
