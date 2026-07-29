@@ -1,40 +1,41 @@
 /**
  * 語り — the reading in the traditional voice.
  *
- * This file does what app/engine/reading.js deliberately refuses to do: it
- * speaks about the person, gives advice, and reads the year ahead. That is why
- * it lives behind its own page and never touches the chart page.
+ * This file does what app/engine/reading.js refuses to do: it judges, names,
+ * advises, and reads the year. That is why it lives behind its own page and
+ * never touches the chart page.
  *
- * The division is the honest part. On the board page, every sentence is
- * checkable against the eight characters and anything unsourced is destroyed at
- * generation. Here the register changes, and the page says so plainly rather
- * than letting the reader assume the two carry the same weight.
+ * It is built around two things the first draft was missing, and their absence
+ * is exactly why that draft told the reader nothing:
  *
- * What keeps this from being a Barnum machine anyway:
+ *   1. **A verdict.** 身強 or 身弱, and therefore 用神 — the element the chart
+ *      needs. This is what a four-pillars reading turns on; without it you have
+ *      a pile of true, unconnected observations. Every passage hangs off it.
  *
- *   - every passage is still keyed to specific characters, and still carries
- *     its sources, so nothing here fits everybody;
- *   - the imagery for the ten stems (甲 the standing tree, 辛 the polished
- *     stone, 壬 the open sea …) is the received 十干の象 of the tradition, not
- *     invented here;
- *   - the same anti-Barnum measurement runs over this layer too.
+ *   2. **A name.** 天星術 works because a reader leaves with "I am a 満月".
+ *      Four pillars already owns the raw material — the 十干の象 (甲 the
+ *      standing tree, 辛 the polished stone, 壬 the open sea) and the season of
+ *      the month branch. Crossed, they give 40 named types, each derived
+ *      entirely from the board: 夏の珠玉, 冬の大樹.
  *
- * 正確さは盤に、断言は読みに。The board does not bend; this page is where the
- * tradition is allowed to speak in its own voice.
+ * Order is the order a reading is delivered in:
+ *   名前 → 結論 → なぜ → どういう人か → 今年 → どうするか
+ *
+ * On 統計学: systems in this genre routinely claim a statistical basis and then
+ * show no numbers. This one shows them. Every passage, and the type name
+ * itself, carries a frequency measured over 20,000 charts (rarity.js), so a
+ * line that feels uncannily personal can be checked against how many people
+ * share it. That is the claim actually kept rather than merely made.
  */
 
-import { ELEMENTS, ELEMENT_NAMES, STEMS, BRANCHES, elementBalance, pillarFromIndex } from './pillars.js';
+import { ELEMENTS, ELEMENT_NAMES, elementBalance, pillarFromIndex } from './pillars.js';
+import { judgeStrength, yearFit } from './strength.js';
 import { governingRisshun } from './terms.js';
 import { calendarDate } from './swe.js';
 
-const GENERATES = { wood: 'fire', fire: 'earth', earth: 'metal', metal: 'water', water: 'wood' };
-const CONTROLS = { wood: 'earth', earth: 'water', water: 'fire', fire: 'metal', metal: 'wood' };
 const el = (e) => ELEMENT_NAMES[e];
 
-/**
- * 十干の象 — the received imagery of the ten stems, with the character reading
- * that has traditionally been drawn from each.
- */
+/** 十干の象 — the received imagery of the ten stems. */
 const STEM_IMAGE = {
   甲: { image: '大樹', body: 'まっすぐ天へ伸びる木。曲がることを知らず、支えを求めず、上へ伸びることでしか自分を確かめられない。折れるとしたら、しなわなかったからだ。' },
   乙: { image: '蔓草', body: '巻きつき、しなり、隙間を縫って伸びる草。強く見えないことを選び、そのぶん折れない。まっすぐでないことは、弱さではなく戦い方だ。' },
@@ -48,202 +49,183 @@ const STEM_IMAGE = {
   癸: { image: '雨露', body: '染み込む水。音を立てず、低いところへ行き、気づかれないうちに行き渡っている。目立つ働きをしないので、働いていないと誤解される。' },
 };
 
-/** How the season stands to the day master, in the traditional register. */
-function seasonStance(me, season) {
-  if (me === season) {
-    return { key: `${el(me)}比和`, tenor: 'strong', text: `生まれた季節の五行は${el(season)}。日主と同じものが季節を占めている。地の利がある側で、押せば通る。通りすぎることのほうが、この人には難しい。` };
-  }
-  if (GENERATES[season] === me) {
-    return { key: `${el(season)}生${el(me)}`, tenor: 'strong', text: `季節の五行は${el(season)}で、これは${el(me)}を生じる。与えられて生まれてきた側だ。手が足りなくなることは少なく、そのぶん自分で掴む理由を見つけにくい。` };
-  }
-  if (GENERATES[me] === season) {
-    return { key: `${el(me)}生${el(season)}`, tenor: 'weak', text: `季節の五行は${el(season)}で、${el(me)}はこれを生じる。生まれつき与える側に立っている。出し続ける配置なので、補給を自分の仕事だと思っていないと、静かに減っていく。` };
-  }
-  if (CONTROLS[me] === season) {
-    return { key: `${el(me)}剋${el(season)}`, tenor: 'active', text: `季節の五行は${el(season)}で、${el(me)}はこれを剋す。生まれた季節に働きかける側だ。扱う対象があるほど落ち着き、何もない時期に持て余す。` };
-  }
-  return { key: `${el(season)}剋${el(me)}`, tenor: 'pressed', text: `季節の五行は${el(season)}で、これが${el(me)}を剋す。生まれた季節に抑えられている側だ。楽な配置ではない。ただし抑えられて形になるものは、抑えられなかったものより硬い。` };
-}
+/** The season a month branch names. 寅卯辰 spring, 巳午未 summer, and so on. */
+const SEASON_OF_BRANCH = {
+  寅: '春', 卯: '春', 辰: '春',
+  巳: '夏', 午: '夏', 未: '夏',
+  申: '秋', 酉: '秋', 戌: '秋',
+  亥: '冬', 子: '冬', 丑: '冬',
+};
 
-/** The tendencies the balance of the eight characters points at. */
-function tendencies(chart) {
-  const { counts, sources, total } = elementBalance(chart.pillars);
-  const out = [];
-  const peak = Math.max(...ELEMENTS.map((e) => counts[e]));
-
-  const heavy = ELEMENTS.filter((e) => counts[e] === peak && peak >= 3);
-  for (const e of heavy) {
-    const line = {
-      wood: '伸びること、始めること、育てることに手が伸びる。伸ばす先が無い時期がいちばん苦しい。',
-      fire: '明るみに出すこと、伝えること、燃やすことに手が伸びる。灯し続けるための薪を、自分で用意する必要がある。',
-      earth: '受け止めること、貯めること、均すことに手が伸びる。動かないことが安定にも停滞にもなる。',
-      metal: '断つこと、削ること、決めることに手が伸びる。切れ味は、鈍らせないと人を傷つける。',
-      water: '流れること、知ること、巡らせることに手が伸びる。留まれない性質は、自由にも根無しにもなる。',
-    }[e];
-    out.push({
-      text: `八字のうち${peak}字が${el(e)}。${line}`,
-      source: [...sources[e], `element:${el(e)}`],
-      key: `voiceDominant:${el(e)}`,
-    });
-  }
-
-  const missing = ELEMENTS.filter((e) => counts[e] === 0);
-  for (const e of missing) {
-    const line = {
-      wood: '始める力を、外から借りるか、後から身につけることになる。',
-      fire: '自分を明るみに出す働きを、意識して作らないと省いてしまう。',
-      earth: '受け止めて留める働きが薄い。抱えたものが素通りしやすい。',
-      metal: '断つ働きが薄い。決めきれずに持ち越したものが積もりやすい。',
-      water: '巡らせて流す働きが薄い。溜め込んだものを自分で動かしにくい。',
-    }[e];
-    out.push({
-      text: `${total}字を数えて、${el(e)}が一字も無い。${line}無いものは、生涯かけて外から取りに行くことになる。`,
-      source: [`absent:${el(e)}`, `counted_total:${total}`],
-      key: `voiceAbsent:${el(e)}`,
-    });
-  }
-  return out;
-}
-
-/** Themes the stem unions and branch clashes put on the board. */
-function relations(chart) {
-  const out = [];
-  const P = { year: '年', month: '月', day: '日', hour: '時' };
-  const order = ['year', 'month', 'day', 'hour'];
-  const era = { year: '生家と育った土台', month: '仕事と社会に出た場所', day: '自分と伴侶', hour: '晩年と、自分が作る側の場' };
-
-  for (let i = 0; i < order.length - 1; i += 1) {
-    const a = chart.pillars[order[i]];
-    const b = chart.pillars[order[i + 1]];
-    if (!a || !b || Math.abs(a.stem - b.stem) !== 5) continue;
-    out.push({
-      text: `${P[order[i]]}干${a.stemChar}と${P[order[i + 1]]}干${b.stemChar}が干合している。隣り合う二つが結ばれる配置で、${era[order[i]]}と${era[order[i + 1]]}が、切り離せない一つの話として動く。`,
-      source: [`${order[i]}_stem:${a.stemChar}`, `${order[i + 1]}_stem:${b.stemChar}`, `relation:${a.stemChar}${b.stemChar}合`],
-      key: `voiceUnion:${order[i]}`,
-    });
-  }
-
-  for (let i = 0; i < order.length; i += 1) {
-    for (let j = i + 1; j < order.length; j += 1) {
-      const a = chart.pillars[order[i]];
-      const b = chart.pillars[order[j]];
-      if (!a || !b || Math.abs(a.branch - b.branch) !== 6) continue;
-      out.push({
-        text: `${P[order[i]]}支${a.branchChar}と${P[order[j]]}支${b.branchChar}が冲。向かい合って動かし合う配置で、${era[order[i]]}と${era[order[j]]}のあいだに、揺れが置かれている。揺れは壊れではない。動かないものは、動かせもしない。`,
-        source: [`${order[i]}_branch:${a.branchChar}`, `${order[j]}_branch:${b.branchChar}`, `relation:${a.branchChar}${b.branchChar}冲`],
-        key: `voiceClash:${order[i]}${order[j]}`,
-      });
-    }
-  }
-  return out;
-}
+/** What leaning on an element looks like in a life, not in a diagram. */
+const ELEMENT_AS_LIFE = {
+  wood: { short: '始めること', long: '新しく始める場、育てる相手、学びの場。伸びしろのあるほうへ身を置くこと' },
+  fire: { short: '表に出ること', long: '人前に出る機会、発信、明るい場所、人と会う予定。隠れていると効きめが出ない' },
+  earth: { short: '土台を持つこと', long: '所属、住まい、蓄え、続けている習慣。動かないものを一つ持つこと' },
+  metal: { short: '決めること', long: '締切、基準、専門技術、磨く対象。曖昧なまま置かないこと' },
+  water: { short: '動くこと・知ること', long: '移動、対話、情報、流れのある場所。溜め込まず巡らせること' },
+};
 
 /**
- * 年運 — how the current solar year stands to the day master.
- * The year turns at 立春, not on 1 January, so it is computed the same way the
- * year pillar is.
+ * The type name — the thing a reader leaves with.
+ * 季節 × 十干の象, both taken straight off the board. Forty of them.
  */
-export function yearAhead(chart, nowJdUt) {
+export function typeName(chart) {
+  const day = chart.pillars.day;
+  const season = SEASON_OF_BRANCH[chart.pillars.month.branchChar];
+  const image = STEM_IMAGE[day.stemChar];
+  return {
+    name: `${season}の${image.image}`,
+    season,
+    image: image.image,
+    stem: day.stemChar,
+    source: [`day_stem:${day.stemChar}`, `month_branch:${chart.pillars.month.branchChar}`, `season:${season}`],
+    key: `type:${season}:${image.image}`,
+  };
+}
+
+/* --- 結論 ---------------------------------------------------------------- */
+
+function verdictPassage(chart, strength) {
+  const day = chart.pillars.day;
+  const meaning = {
+    weak: `日主の${el(strength.dayElement)}を支えるものが、盤の中で足りていない。自分ひとりで押し切る形ではなく、支えと味方を先に用意してから動く配置だ。無理が利かないのではなく、無理の利かせ方が違う。`,
+    strong: `日主の${el(strength.dayElement)}が、盤の中で強く立っている。足すより出すほうへ回す配置で、抱えたまま強くなっても行き場が無い。使う先を持っているかどうかで、生き心地がまるく変わる。`,
+    neutral: `日主の${el(strength.dayElement)}を支えるものと削るものが、ほぼ釣り合っている。どちらかに大きく振れていないぶん、環境の側に引っ張られやすい。自分で選んだ場が、そのまま強さにも弱さにもなる。`,
+  }[strength.verdict];
+
+  return {
+    title: strength.label,
+    lead: `要るのは ${strength.needed.map(el).join('と')}。`,
+    text: meaning,
+    source: [
+      `day_stem:${day.stemChar}`,
+      `month_branch:${chart.pillars.month.branchChar}`,
+      `judgement:${strength.label}`,
+    ],
+    key: `verdict:${strength.verdict}`,
+  };
+}
+
+/** What leaning on the needed elements actually means to do. */
+function needPassage(strength) {
+  const parts = strength.needed.map((e) => `${el(e)}は${ELEMENT_AS_LIFE[e].long}`);
+  return {
+    title: `用神 — ${strength.needed.map(el).join('・')}`,
+    text: `${parts.join('。')}。ここに寄せるほど盤は釣り合いに近づく。逆に ${strength.avoided.map(el).join('・')} に偏る場は、当人が思うより消耗する。`,
+    source: strength.needed.map((e) => `needed:${el(e)}`)
+      .concat(strength.avoided.map((e) => `avoided:${el(e)}`)),
+    key: `need:${strength.verdict}:${strength.needed.map(el).join('')}`,
+  };
+}
+
+/* --- どういう人か --------------------------------------------------------- */
+
+function portraitPassage(chart, strength) {
+  const day = chart.pillars.day;
+  const image = STEM_IMAGE[day.stemChar];
+  const tail = {
+    weak: `支えが足りない側なので、この${image.image}は、置かれる場所で見え方が大きく変わる。`,
+    strong: `支えの厚い側なので、この${image.image}は、放っておいても形が出る。出しすぎが唯一の問題になる。`,
+    neutral: `支えと削りが釣り合っているので、この${image.image}は、周りの色をよく映す。`,
+  }[strength.verdict];
+  return {
+    title: `日主 ${day.stemChar} — ${image.image}`,
+    text: `${image.body}${tail}`,
+    source: [`day_stem:${day.stemChar}`, `image:${image.image}`, `judgement:${strength.label}`],
+    key: `portrait:${day.stemChar}:${strength.verdict}`,
+  };
+}
+
+/** What the board is missing entirely, in life terms. */
+function absencePassage(chart, strength) {
+  const { counts, total } = elementBalance(chart.pillars);
+  const missing = ELEMENTS.filter((e) => counts[e] === 0);
+  if (missing.length === 0) return null;
+
+  const isNeeded = missing.filter((e) => strength.needed.includes(e));
+  const head = `${total}字を数えて、${missing.map(el).join('と')}が一字も無い。`;
+  const tail = isNeeded.length > 0
+    ? `しかもその${isNeeded.map(el).join('と')}は、この盤が必要としているものだ。持っていないものを必要とする配置なので、性格で補おうとしても届かない。外から、仕組みとして取りに行くことになる。`
+    : `${missing.map((e) => ELEMENT_AS_LIFE[e].short).join('と')}にあたる働きが、生まれつき手元に無い。必要な場面では、借りるか、後から身につけることになる。`;
+
+  return {
+    title: `${missing.map(el).join('・')}が無い`,
+    text: head + tail,
+    source: missing.map((e) => `absent:${el(e)}`).concat(`counted_total:${total}`),
+    key: `absence:${missing.map(el).join('')}:${isNeeded.length > 0 ? 'needed' : 'other'}`,
+  };
+}
+
+/* --- 今年 ----------------------------------------------------------------- */
+
+export function yearAhead(chart, strength, nowJdUt) {
   const risshun = governingRisshun(nowJdUt, 'teiki');
   const solarYear = calendarDate(risshun).year;
   const pillar = pillarFromIndex(((solarYear - 4) % 60 + 60) % 60);
-  const me = chart.pillars.day.stemElement;
-  const it = pillar.stemElement;
+  const fit = yearFit(strength, pillar.stemElement);
 
-  let text;
-  let key;
-  if (me === it) {
-    key = 'peer';
-    text = `今年は${pillar.text}。年の干は${el(it)}で、日主と同じ五行が巡っている。同じものが増える年で、味方も競合も同時に増える。分け合うことを決めておくと荒れない。`;
-  } else if (GENERATES[it] === me) {
-    key = 'support';
-    text = `今年は${pillar.text}。年の干は${el(it)}で、${el(me)}を生じる。与えられる年だ。受け取る用意がある者にだけ届くので、求めることを恥じないほうがいい。`;
-  } else if (GENERATES[me] === it) {
-    key = 'output';
-    text = `今年は${pillar.text}。年の干は${el(it)}で、${el(me)}がこれを生じる。出す年だ。作ったものが外へ出ていく代わりに、自分は減る。休む予定を先に入れておくこと。`;
-  } else if (CONTROLS[me] === it) {
-    key = 'gain';
-    text = `今年は${pillar.text}。年の干は${el(it)}で、${el(me)}がこれを剋す。掴みにいく年だ。対象がはっきりしているほど働きやすく、漠然と待つといちばん損をする。`;
-  } else {
-    key = 'pressure';
-    text = `今年は${pillar.text}。年の干は${el(it)}で、${el(me)}を剋す。圧のかかる年だ。抑えられている間は形が決まる時期でもある。逃げ切るより、削られる場所を選ぶほうがいい。`;
-  }
+  const body = {
+    needed: `年の干は${pillar.stemChar}、${el(pillar.stemElement)}。この盤が必要としている五行が巡る年だ。追い風の側で、動かせば動く。待っていても向こうからは来ないので、この年に置いた種のほうが後で効く。`,
+    avoided: `年の干は${pillar.stemChar}、${el(pillar.stemElement)}。この盤が苦手とする五行が巡る年だ。向かい風の側で、押し返そうとするほど減る。守るというより、削られる場所を自分で選ぶ年になる。`,
+    neutral: `年の干は${pillar.stemChar}、${el(pillar.stemElement)}。用神でも忌神でもない五行が巡る年だ。外からの追い風も向かい風も弱く、自分で決めたぶんだけ進む。`,
+  }[fit];
 
   return {
-    text,
-    source: [`day_stem:${chart.pillars.day.stemChar}`, `year_of_reading:${pillar.text}`, `relation:${el(it)}／${el(me)}`],
-    key: `voiceYear:${key}`,
+    title: `${solarYear}年 ${pillar.text} — ${{ needed: '追い風', avoided: '向かい風', neutral: '平' }[fit]}`,
+    text: body,
+    source: [`day_stem:${chart.pillars.day.stemChar}`, `year_pillar:${pillar.text}`,
+      `judgement:${strength.label}`, `fit:${fit}`],
+    key: `year:${fit}`,
+    fit,
     pillar,
     solarYear,
   };
 }
 
-/** Advice, drawn from the stance and the balance — never from nowhere. */
-function advice(chart, stance) {
-  const { counts } = elementBalance(chart.pillars);
-  const out = [];
-  const day = chart.pillars.day;
+/* --- どうするか ----------------------------------------------------------- */
 
-  const byStance = {
-    strong: '力のある配置なので、足すより使うほうへ回したほうがいい。抱えたまま強くなっても、行き場が無い。',
-    weak: '出す側の配置なので、補給を予定に組み込むこと。休むことは怠けではなく、この盤では作業のうちだ。',
-    active: '扱う対象があるほど整う配置だ。仕事でも人でもいい、手をかける相手を切らさないこと。',
-    pressed: '抑えられる配置だ。逆らって消耗するより、圧のかかる場所を自分で選ぶほうが早く形になる。',
-  };
-  out.push({
-    text: byStance[stance.tenor],
-    source: [`day_stem:${day.stemChar}`, `month_branch:${chart.pillars.month.branchChar}`, `relation:${stance.key}`],
-    key: `voiceAdvice:${stance.tenor}`,
-  });
-
-  const missing = ELEMENTS.filter((e) => counts[e] === 0);
-  if (missing.length > 0) {
-    const how = {
-      wood: '新しく始める場に身を置く',
-      fire: '人前に出す機会を作る',
-      earth: '留める仕組みを外から借りる',
-      metal: '締切と基準を人に決めてもらう',
-      water: '流れる場所へ定期的に移る',
-    };
-    out.push({
-      text: `${missing.map(el).join('と')}が無い盤なので、${missing.map((e) => how[e]).join('、')}——それを習慣のほうで補うことになる。持っていないものは、性格で補えない。`,
-      source: missing.map((e) => `absent:${el(e)}`),
-      key: `voiceAdviceAbsent:${missing.map(el).join('')}`,
-    });
-  }
-  return out;
+function advicePassages(strength, year) {
+  return [
+    {
+      title: '置く場所',
+      text: `${strength.needed.map((e) => ELEMENT_AS_LIFE[e].short).join('と')}——それが手に入る場に身を置くこと。${strength.label}の盤では、努力の量より、どこで努力するかのほうが結果を分ける。`,
+      source: strength.needed.map((e) => `needed:${el(e)}`).concat(`judgement:${strength.label}`),
+      key: `advicePlace:${strength.verdict}`,
+    },
+    {
+      title: '今年の構え',
+      text: {
+        needed: '追い風の年は、広げるほうに使う。守りに入ると、この年が持ってきたものを取りこぼす。',
+        avoided: '向かい風の年は、広げるより整えるほうに使う。この年に削られたぶんは、形になって残る。',
+        neutral: '外の力が弱い年は、自分の予定がそのまま結果になる。決めたことを、決めた通りに置いていくこと。',
+      }[year.fit],
+      source: [`fit:${year.fit}`, `year_pillar:${year.pillar.text}`],
+      key: `adviceYear:${year.fit}`,
+    },
+  ];
 }
 
-/** The whole reading, in the traditional voice. */
-export function speak(chart, nowJdUt) {
-  const day = chart.pillars.day;
-  const image = STEM_IMAGE[day.stemChar];
-  const stance = seasonStance(day.stemElement, chart.pillars.month.branchElement);
+/* --- assembly ------------------------------------------------------------- */
 
+export function speak(chart, nowJdUt) {
+  const strength = judgeStrength(chart.pillars);
+  const year = yearAhead(chart, strength, nowJdUt);
   return {
-    portrait: {
-      title: `${day.stemChar} — ${image.image}`,
-      text: image.body,
-      source: [`day_stem:${day.stemChar}`, `image:${image.image}`],
-      key: `voicePortrait:${day.stemChar}`,
-    },
-    season: {
-      text: stance.text,
-      source: [`day_stem:${day.stemChar}`, `month_branch:${chart.pillars.month.branchChar}`, `relation:${stance.key}`],
-      key: `voiceSeason:${stance.key}`,
-    },
-    tendencies: tendencies(chart),
-    relations: relations(chart),
-    year: yearAhead(chart, nowJdUt),
-    advice: advice(chart, stance),
+    strength,
+    type: typeName(chart),
+    verdict: verdictPassage(chart, strength),
+    need: needPassage(strength),
+    portrait: portraitPassage(chart, strength),
+    absence: absencePassage(chart, strength),
+    year,
+    advice: advicePassages(strength, year),
   };
 }
 
 /** Every passage, flattened — for the anti-Barnum measurement. */
 export function voiceStatements(chart, nowJdUt) {
   const v = speak(chart, nowJdUt);
-  return [v.portrait, v.season, ...v.tendencies, ...v.relations, v.year, ...v.advice]
-    .filter((s) => s && s.text && Array.isArray(s.source) && s.source.length > 0);
+  return [v.type, v.verdict, v.need, v.portrait, v.absence, v.year, ...v.advice]
+    .filter((s) => s && Array.isArray(s.source) && s.source.length > 0);
 }
-
-export { STEMS, BRANCHES };

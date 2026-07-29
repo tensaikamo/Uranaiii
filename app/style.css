@@ -604,6 +604,61 @@ button.primary:active { background: rgba(201, 169, 97, 0.2); }
 .register strong { color: var(--ink); font-weight: 400; }
 .register a { color: var(--brass); }
 
+/* The name, first and largest — it is what the reader keeps. */
+.hero {
+  margin-top: 22px;
+  padding: 24px 20px 20px;
+  border: 1px solid var(--brass-dim);
+  border-radius: 3px;
+  background: linear-gradient(180deg, rgba(201,169,97,0.10), rgba(201,169,97,0.02));
+  text-align: center;
+}
+.hero-eyebrow {
+  margin: 0;
+  font-size: 10.5px;
+  letter-spacing: 0.3em;
+  color: var(--brass);
+  opacity: 0.8;
+}
+.hero-name {
+  margin: 8px 0 0;
+  font-family: var(--mincho);
+  font-size: 40px;
+  line-height: 1.35;
+  letter-spacing: 0.1em;
+  background: linear-gradient(180deg, #FBF2DE 0%, var(--brass) 70%, #96773A 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.hero-verdict {
+  margin: 14px 0 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.hero-badge {
+  font-family: var(--mincho);
+  font-size: 15px;
+  letter-spacing: 0.16em;
+  padding: 3px 12px;
+  border-radius: 2px;
+  border: 1px solid var(--rule-strong);
+}
+.hero-badge.is-weak { color: var(--el-water); border-color: rgba(90,143,216,0.5); }
+.hero-badge.is-strong { color: var(--el-fire); border-color: rgba(226,87,75,0.5); }
+.hero-badge.is-neutral { color: var(--el-earth); border-color: rgba(217,164,65,0.5); }
+.hero-need { font-family: var(--mincho); font-size: 17px; color: var(--ink); }
+.hero-freq {
+  margin: 12px 0 0;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--ink-faint);
+  line-height: 1.6;
+}
+
 .voice-strip {
   display: flex;
   justify-content: space-around;

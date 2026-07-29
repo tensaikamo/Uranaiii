@@ -120,7 +120,7 @@ Swiss Ephemeris 2.10.03, bundled in `vendor/swisseph-wasm/`
 | ✓ | every passage is sourced | 0 unsourced passages across 300 charts |
 | ✓ | every cited character is actually on the board | 0 citations naming a character not in the chart |
 | ✓ | every passage carries a measured frequency | 0 passages missing from the rarity table |
-| ✓ | passages discriminate between charts | 280/300 distinct passage sets = 93.3% |
+| ✓ | passages discriminate between charts | 199/300 distinct passage sets = 66.3% |
 
 ## Sources
 

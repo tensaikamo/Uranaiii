@@ -34,6 +34,7 @@
 
 import { ELEMENTS, ELEMENT_NAMES, elementBalance } from './pillars.js';
 import { frequencyOf } from './rarity.js';
+import { judgeStrength } from './strength.js';
 
 /** 相生 — each element generates the next. */
 const GENERATES = { wood: 'fire', fire: 'earth', earth: 'metal', metal: 'water', water: 'wood' };
@@ -75,6 +76,28 @@ function say({ text, source, group, key }) {
  * Each takes the chart and returns zero or more statements, in the order they
  * should be read. A rule that does not apply returns nothing; it never pads.
  */
+
+/**
+ * The verdict — 身強／身弱 and therefore 用神.
+ *
+ * A reading without this is a list of true facts that arrives nowhere, which
+ * is what this layer was. It belongs on the board page too, because it is
+ * derived from the board and every term of the arithmetic can be cited.
+ */
+function ruleVerdict(chart) {
+  const s = judgeStrength(chart.pillars);
+  const near = s.margin < 1
+    ? `境界（±${s.band}）まで ${s.margin} しかなく、蔵干の扱い次第で逆に振れうる。`
+    : '';
+  return [say({
+    text: `扶抑法で数えると ${s.score > 0 ? '+' : ''}${s.score}、${s.label}。`
+      + `この盤が必要とする五行は ${s.needed.map(el).join('・')}、避けたいのは ${s.avoided.map(el).join('・')}。${near}`,
+    source: [`day_stem:${chart.pillars.day.stemChar}`, `month_branch:${chart.pillars.month.branchChar}`,
+      `judgement:${s.label}`, ...s.needed.map((e) => `needed:${el(e)}`)],
+    group: 'core',
+    key: `boardVerdict:${s.verdict}`,
+  })];
+}
 
 /** 日主 — who the chart is reckoned from. */
 function ruleDayMaster({ pillars }) {
@@ -223,6 +246,7 @@ function ruleAbsent(chart) {
 }
 
 export const RULES = [
+  ruleVerdict,
   ruleDayMaster,
   ruleMonthCommand,
   ruleNeighbourStems,
@@ -266,6 +290,11 @@ export function readChart(chart) {
   return statements.sort((a, b) => {
     const byGroup = GROUP_RANK[a.group] - GROUP_RANK[b.group];
     if (byGroup !== 0) return byGroup;
+    // The verdict leads its group whatever its frequency: sorting the
+    // conclusion to the bottom because it is common defeats the point of
+    // having one.
+    const pinned = (x) => (x.key.startsWith('boardVerdict') ? 0 : 1);
+    if (pinned(a) !== pinned(b)) return pinned(a) - pinned(b);
     const fa = a.frequency === null ? 1 : a.frequency;
     const fb = b.frequency === null ? 1 : b.frequency;
     return fa - fb;
@@ -282,9 +311,12 @@ export function readChart(chart) {
 export function summarise(chart) {
   const day = chart.pillars.day;
   const month = chart.pillars.month;
+  const s = judgeStrength(chart.pillars);
   return {
-    text: `${el(day.stemElement)}の日主が、${el(month.branchElement)}の季節に生まれている。`,
-    source: [`day_stem:${day.stemChar}`, `month_branch:${month.branchChar}`],
+    text: `${el(day.stemElement)}の日主が${el(month.branchElement)}の季節に生まれ、${s.label}。`
+      + `要るのは ${s.needed.map(el).join('と')}。`,
+    source: [`day_stem:${day.stemChar}`, `month_branch:${month.branchChar}`, `judgement:${s.label}`],
+    strength: s,
   };
 }
 
