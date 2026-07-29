@@ -59,12 +59,14 @@ export const GROUPS = [
 
 /** Plain-language glosses, so the reading does not hide behind its vocabulary. */
 export const GLOSSARY = [
-  ['日主', '生まれた日の天干。四柱推命はこの一字を「自分」に当てて、他の七字との関係を読む。'],
-  ['月令', '生まれた月の地支が示す季節。日主がその季節の五行とどう関係するかを見る。'],
-  ['相生', '木→火→土→金→水→木 の順で、前が後を生む関係。'],
+  ['日主', '生まれた日の上の字。この一字を「本人」として、残り7字との関係を読む。'],
+  ['身強・身弱', '本人にあたる字が、まわりから助けられているか削られているか。四柱推命でいちばん大事な判定。'],
+  ['用神', 'その人に効く五行。身弱なら助ける側、身強なら出す側の五行になる。'],
+  ['月令', '生まれた月が示す季節。8字の中でいちばん強く効く。'],
+  ['相生', '木→火→土→金→水→木 の順で、前が後を生む（助ける）関係。'],
   ['相剋', '木→土→水→火→金→木 の順で、前が後を抑える関係。'],
-  ['干合', '十干のうち定まった五組（甲己・乙庚・丙辛・丁壬・戊癸）が隣り合うこと。'],
-  ['冲', '向かい合う地支の六組（子午・丑未・寅申・卯酉・辰戌・巳亥）が同じ盤にあること。'],
+  ['干合', '決まった5組（甲己・乙庚・丙辛・丁壬・戊癸）が隣り合うこと。'],
+  ['冲', '正反対の6組（子午・丑未・寅申・卯酉・辰戌・巳亥）が同じ盤にあること。'],
 ];
 
 /** A statement, with the board elements it rests on. */
@@ -87,11 +89,11 @@ function say({ text, source, group, key }) {
 function ruleVerdict(chart) {
   const s = judgeStrength(chart.pillars);
   const near = s.margin < 1
-    ? `境界（±${s.band}）まで ${s.margin} しかなく、蔵干の扱い次第で逆に振れうる。`
+    ? `境目まで ${s.margin} しかないので、流派によっては逆の判定になる。`
     : '';
   return [say({
-    text: `扶抑法で数えると ${s.score > 0 ? '+' : ''}${s.score}、${s.label}。`
-      + `この盤が必要とする五行は ${s.needed.map(el).join('・')}、避けたいのは ${s.avoided.map(el).join('・')}。${near}`,
+    text: `8文字それぞれが日主を助けるか削るかを数えると ${s.score > 0 ? '+' : ''}${s.score} で、${s.label}。`
+      + `この人に効く五行は ${s.needed.map(el).join('・')}、消耗しやすいのは ${s.avoided.map(el).join('・')}。${near}`,
     source: [`day_stem:${chart.pillars.day.stemChar}`, `month_branch:${chart.pillars.month.branchChar}`,
       `judgement:${s.label}`, ...s.needed.map((e) => `needed:${el(e)}`)],
     group: 'core',
@@ -103,7 +105,7 @@ function ruleVerdict(chart) {
 function ruleDayMaster({ pillars }) {
   const d = pillars.day;
   return [say({
-    text: `日主は${d.stemChar}。${el(d.stemElement)}の${d.yinYang}。四柱推命はこの一字を自分に当て、残る七字との関係で盤を読む。`,
+    text: `本人にあたる字は${d.stemChar}で、${el(d.stemElement)}の${d.yinYang}（日主）。残り7字との関係を、この字から見ていく。`,
     source: [`day_stem:${d.stemChar}`, `element:${el(d.stemElement)}`, `polarity:${d.yinYang}`],
     group: 'core',
     key: `dayMaster:${d.stemChar}`,
@@ -119,7 +121,7 @@ function ruleMonthCommand({ pillars }) {
   const month = pillars.month;
   const me = day.stemElement;
   const season = month.branchElement;
-  const head = `月支は${month.branchChar}で、季節の五行は${el(season)}。`;
+  const head = `生まれた月の字は${month.branchChar}、季節の五行は${el(season)}。`;
   const source = [`day_stem:${day.stemChar}`, `month_branch:${month.branchChar}`];
   const build = (relation, tail) => [say({
     text: head + tail,
@@ -130,22 +132,22 @@ function ruleMonthCommand({ pillars }) {
 
   if (me === season) {
     return build(`${el(me)}比和`,
-      `日主の${el(me)}と同じ五行が季節を占めており、日主は季節に支えられる側に立つ。`);
+      `本人と同じ${el(me)}が季節を占めているので、季節に支えられる側。`);
   }
   if (GENERATES[me] === season) {
     return build(`${el(me)}生${el(season)}`,
-      `${el(me)}は${el(season)}を生じる（相生）。日主は与える側に立ち、消耗しやすい配置になる。`);
+      `${el(me)}は${el(season)}を生む関係なので、本人は与える側。消耗しやすい。`);
   }
   if (GENERATES[season] === me) {
     return build(`${el(season)}生${el(me)}`,
-      `${el(season)}は${el(me)}を生じる（相生）。日主は季節から与えられる側に立つ。`);
+      `${el(season)}は${el(me)}を生む関係なので、本人は季節から与えられる側。`);
   }
   if (CONTROLS[me] === season) {
     return build(`${el(me)}剋${el(season)}`,
-      `${el(me)}は${el(season)}を剋す（相剋）。日主は季節に働きかける側に立つ。`);
+      `${el(me)}は${el(season)}を抑える関係なので、本人は季節に働きかける側。`);
   }
   return build(`${el(season)}剋${el(me)}`,
-    `${el(season)}は${el(me)}を剋す（相剋）。日主は季節に抑えられる側に立つ。`);
+    `${el(season)}が${el(me)}を抑える関係なので、本人は季節に抑えられる側。`);
 }
 
 /** How the stems flanking the day master stand to it. */
@@ -160,12 +162,12 @@ function ruleNeighbourStems({ pillars }) {
     if (me === it) continue; // 比和 adds nothing beyond the balance count
     let relation;
     let phrase;
-    if (GENERATES[it] === me) { relation = `${el(it)}生${el(me)}`; phrase = '日主を生じる'; }
-    else if (GENERATES[me] === it) { relation = `${el(me)}生${el(it)}`; phrase = '日主が生じる'; }
-    else if (CONTROLS[it] === me) { relation = `${el(it)}剋${el(me)}`; phrase = '日主を剋す'; }
-    else { relation = `${el(me)}剋${el(it)}`; phrase = '日主が剋す'; }
+    if (GENERATES[it] === me) { relation = `${el(it)}生${el(me)}`; phrase = '本人を助ける'; }
+    else if (GENERATES[me] === it) { relation = `${el(me)}生${el(it)}`; phrase = '本人が与える'; }
+    else if (CONTROLS[it] === me) { relation = `${el(it)}剋${el(me)}`; phrase = '本人を抑える'; }
+    else { relation = `${el(me)}剋${el(it)}`; phrase = '本人が抑える'; }
     out.push(say({
-      text: `隣の${PILLAR_JA[key]}干は${other.stemChar}、${el(it)}。${phrase}（${relation}）。`,
+      text: `隣の${PILLAR_JA[key]}の上の字は${other.stemChar}（${el(it)}）。${phrase}（${relation}）。`,
       source: [`day_stem:${day.stemChar}`, `${key}_stem:${other.stemChar}`, `relation:${relation}`],
       group: 'relation',
       key: `neighbour:${key}:${phrase}`,
@@ -183,7 +185,7 @@ function ruleStemUnion({ pillars }) {
     if (!a || !b) continue;
     if (Math.abs(a.stem - b.stem) !== 5) continue;
     out.push(say({
-      text: `${PILLAR_JA[ORDER[i]]}干${a.stemChar}と${PILLAR_JA[ORDER[i + 1]]}干${b.stemChar}が隣り合い、干合の組になっている。`,
+      text: `${PILLAR_JA[ORDER[i]]}の${a.stemChar}と${PILLAR_JA[ORDER[i + 1]]}の${b.stemChar}が隣り合って、決まった組（干合）になっている。`,
       source: [`${ORDER[i]}_stem:${a.stemChar}`, `${ORDER[i + 1]}_stem:${b.stemChar}`,
         `relation:${a.stemChar}${b.stemChar}合`],
       group: 'relation',
@@ -203,7 +205,7 @@ function ruleBranchClash({ pillars }) {
       if (!a || !b) continue;
       if (Math.abs(a.branch - b.branch) !== 6) continue;
       out.push(say({
-        text: `${PILLAR_JA[ORDER[i]]}支${a.branchChar}と${PILLAR_JA[ORDER[j]]}支${b.branchChar}が向かい合い、冲の組になっている。`,
+        text: `${PILLAR_JA[ORDER[i]]}の${a.branchChar}と${PILLAR_JA[ORDER[j]]}の${b.branchChar}が正反対で、引っ張り合う組（冲）になっている。`,
         source: [`${ORDER[i]}_branch:${a.branchChar}`, `${ORDER[j]}_branch:${b.branchChar}`,
           `relation:${a.branchChar}${b.branchChar}冲`],
         group: 'relation',
@@ -223,7 +225,7 @@ function ruleDominant(chart) {
   // elementBalance already labels each contributing character as e.g. 年干:庚,
   // which is exactly the citation this statement needs.
   return heavy.map((e) => say({
-    text: `${total}字のうち${peak}字が${el(e)}。${sources[e].join('・')}の${peak}字。`,
+    text: `${total}字のうち${peak}字が${el(e)}。${sources[e].join('・')}。いちばん多い。`,
     source: [...sources[e], `element:${el(e)}`],
     group: 'balance',
     key: `dominant:${el(e)}:${peak}`,
@@ -238,7 +240,7 @@ function ruleAbsent(chart) {
   // The evidence for an absence is the full set of characters that were read.
   const evidence = ELEMENTS.flatMap((e) => sources[e]);
   return [say({
-    text: `${total}字を数えて、${missing.map(el).join('と')}が一字も無い。`,
+    text: `${total}字の中に${missing.map(el).join('と')}が1つも無い。`,
     source: [...evidence.map((s) => `counted:${s.split(':')[1]}`), ...missing.map((e) => `absent:${el(e)}`)],
     group: 'balance',
     key: `absent:${missing.map(el).join('')}`,
@@ -313,8 +315,7 @@ export function summarise(chart) {
   const month = chart.pillars.month;
   const s = judgeStrength(chart.pillars);
   return {
-    text: `${el(day.stemElement)}の日主が${el(month.branchElement)}の季節に生まれ、${s.label}。`
-      + `要るのは ${s.needed.map(el).join('と')}。`,
+    text: `${el(day.stemElement)}の人が${el(month.branchElement)}の季節に生まれて、${s.label}。効くのは ${s.needed.map(el).join('と')}。`,
     source: [`day_stem:${day.stemChar}`, `month_branch:${month.branchChar}`, `judgement:${s.label}`],
     strength: s,
   };

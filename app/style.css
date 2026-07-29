@@ -671,6 +671,31 @@ button.primary:active { background: rgba(201, 169, 97, 0.2); }
 .voice-cell-label { font-size: 9.5px; letter-spacing: 0.2em; color: var(--brass); opacity: 0.75; }
 .voice-cell-text { font-family: var(--mincho); font-size: 21px; letter-spacing: 0.06em; }
 
+/* Plain headings: readable size, not a whispered 10px label. */
+.plain-h2 {
+  font-family: var(--mincho);
+  font-size: 21px !important;
+  letter-spacing: 0.06em !important;
+  color: #F2E9D6 !important;
+  opacity: 1 !important;
+  margin: 0 0 10px !important;
+  padding-bottom: 10px !important;
+}
+.voice-lead {
+  margin: 0 0 14px;
+  font-size: 13px;
+  color: var(--brass);
+  line-height: 1.7;
+}
+.hero-tag {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--ink-dim);
+  letter-spacing: 0.04em;
+}
+.voice-strong { color: #FBF2DE; font-weight: 400; border-bottom: 1px solid var(--brass-dim); }
+.cite.is-term { color: var(--ink-dim); border-color: var(--rule-strong); }
+
 .voice-item { margin-bottom: 20px; }
 .voice-item.is-lead .voice-text { font-size: 16px; }
 .voice-title {
@@ -681,12 +706,13 @@ button.primary:active { background: rgba(201, 169, 97, 0.2); }
   color: #F2E9D6;
 }
 .voice-text {
-  margin: 0;
+  margin: 0 0 14px;
   font-family: var(--mincho);
-  font-size: 15px;
-  line-height: 2.05;
+  font-size: 15.5px;
+  line-height: 2.0;
   color: var(--ink);
 }
+.voice-text:last-child { margin-bottom: 0; }
 .cite.is-freq { color: var(--brass); border-color: var(--brass-faint); }
 
 .colophon a { color: var(--brass); }

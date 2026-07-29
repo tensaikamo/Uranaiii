@@ -1,21 +1,19 @@
 /**
  * Wiring for the 語り page.
  *
- * The page is laid out the way a reading is delivered, which is the opposite of
- * how the first draft was laid out:
+ * Laid out the way a reading is delivered:
+ *   名前 → 結論 → なぜ → どんな人か → 今年 → どうするか
  *
- *   名前 → 結論 → なぜ → どういう人か → 今年 → どうするか
- *
- * The name comes first because that is what a reader keeps. The verdict comes
- * second because everything below it hangs off that one judgement. The
- * arithmetic behind the verdict is shown, but folded away — available to anyone
- * who wants to argue with it, out of the way of everyone who does not.
+ * The name comes first because that is what a reader keeps. Everything below
+ * hangs off the one verdict. The arithmetic behind the verdict is available but
+ * folded away — there for anyone who wants to argue with it, out of the way of
+ * everyone who does not.
  */
 
 import { initEphemeris, withinEphemeris, EPHEMERIS_YEARS, julianDay } from './engine/swe.js';
 import { buildChart, DEFAULT_AXES } from './engine/chart.js';
 import { speak } from './engine/voice.js';
-import { describeFrequency } from './engine/reading.js';
+import { peopleIn } from './engine/plainwords.js';
 import { frequencyOf, RARITY_SAMPLES } from './engine/rarity.js';
 import { el } from './ui/render.js';
 import { startSky } from './ui/sky.js';
@@ -52,7 +50,7 @@ form.addEventListener('submit', (event) => {
 
   if (!withinEphemeris(year)) {
     output.append(el('p', 'notice',
-      `同梱の天体暦は西暦 ${EPHEMERIS_YEARS.from} 年から ${EPHEMERIS_YEARS.to} 年まで。範囲内の日付を入力してください。`));
+      `使っている天体暦は西暦 ${EPHEMERIS_YEARS.from} 年から ${EPHEMERIS_YEARS.to} 年までです。この範囲の日付を入れてください。`));
     return;
   }
 
@@ -68,35 +66,41 @@ form.addEventListener('submit', (event) => {
   }
 });
 
-/** The measured frequency chip, in natural frequency. */
-function frequencyChip(key) {
-  const frequency = describeFrequency(frequencyOf(key));
-  return frequency ? el('span', 'cite is-freq', frequency) : null;
+/**
+ * Body text into paragraphs, with **emphasis** honoured.
+ * Built with createTextNode throughout — the text is ours, but the habit of
+ * never assembling DOM from strings is worth keeping.
+ */
+function prose(text, className) {
+  const wrap = el('div', className);
+  for (const para of String(text).split('\n\n')) {
+    const p = el('p', 'voice-text');
+    for (const [i, chunk] of para.split('**').entries()) {
+      if (chunk === '') continue;
+      if (i % 2 === 1) p.append(el('strong', 'voice-strong', chunk));
+      else p.append(document.createTextNode(chunk));
+    }
+    wrap.append(p);
+  }
+  return wrap;
 }
 
 function citations(entry) {
   const cites = el('p', 'reading-source');
-  const chip = frequencyChip(entry.key);
-  if (chip) cites.append(chip);
+  const share = peopleIn(frequencyOf(entry.key));
+  if (share) cites.append(el('span', 'cite is-freq', share));
+  if (entry.term) cites.append(el('span', 'cite is-term', entry.term));
   for (const src of entry.source) cites.append(el('span', 'cite', src));
   return cites;
 }
 
-/** One prose passage: title, body, frequency, sources. */
+/** One passage, rendered as its own titled card. */
 function passage(entry) {
-  const item = el('div', 'voice-item');
-  if (entry.title) item.append(el('p', 'voice-title', entry.title));
-  item.append(el('p', 'voice-text', entry.text));
-  item.append(citations(entry));
-  return item;
-}
-
-function block(title, entries) {
-  const present = (entries || []).filter(Boolean);
-  if (present.length === 0) return null;
   const section = el('section', 'section');
-  section.append(el('h2', null, title));
-  for (const entry of present) section.append(passage(entry));
+  section.append(el('h2', 'plain-h2', entry.title));
+  if (entry.lead) section.append(el('p', 'voice-lead', entry.lead));
+  section.append(prose(entry.text));
+  section.append(citations(entry));
   return section;
 }
 
@@ -110,24 +114,26 @@ function render(input) {
   const v = speak(chart, nowJdUt);
   const s = v.strength;
 
-  /* --- 名前 — what the reader leaves with ------------------------------- */
+  /* --- 名前 --- */
   const hero = el('div', 'hero');
   hero.append(el('p', 'hero-eyebrow', 'あなたは'));
   hero.append(el('p', 'hero-name', v.type.name));
+  hero.append(el('p', 'hero-tag', v.type.tag));
 
-  const verdictRow = el('p', 'hero-verdict');
-  verdictRow.append(el('span', `hero-badge is-${s.verdict}`, s.label));
-  verdictRow.append(el('span', 'hero-need', v.verdict.lead));
-  hero.append(verdictRow);
+  const row = el('p', 'hero-verdict');
+  row.append(el('span', `hero-badge is-${s.verdict}`, v.verdict.title));
+  row.append(el('span', 'hero-need',
+    `効くのは ${s.needed.map((e) => ({ wood: '木', fire: '火', earth: '土', metal: '金', water: '水' }[e])).join('と')}`));
+  hero.append(row);
 
-  const heroFreq = describeFrequency(frequencyOf(v.type.key));
-  if (heroFreq) {
+  const share = peopleIn(frequencyOf(v.type.key));
+  if (share) {
     hero.append(el('p', 'hero-freq',
-      `この型は ${heroFreq}（${RARITY_SAMPLES.toLocaleString('ja-JP')}件の実測。季節×十干で40通り）`));
+      `このタイプは ${share}（${RARITY_SAMPLES.toLocaleString('ja-JP')}人ぶんを実際に数えた結果。全40タイプ）`));
   }
   output.append(hero);
 
-  /* --- the board itself, small, so the reading is never floating --------- */
+  /* --- the board, small --- */
   const strip = el('div', 'voice-strip');
   for (const [key, label] of [['year', '年'], ['month', '月'], ['day', '日'], ['hour', '時']]) {
     const p = chart.pillars[key];
@@ -138,16 +144,13 @@ function render(input) {
   }
   output.append(strip);
 
-  /* --- 結論 -------------------------------------------------------------- */
-  const verdictSection = el('section', 'section');
-  verdictSection.append(el('h2', null, '結論'));
-  verdictSection.append(passage(v.verdict));
-
-  // The arithmetic, folded away. Anyone who wants to disagree can see exactly
-  // where to disagree; anyone who does not is not made to read it.
+  /* --- 結論 + なぜ --- */
+  const verdictSection = passage(v.verdict);
   const why = el('details', 'gloss');
-  why.append(el('summary', 'gloss-summary',
-    `なぜ${s.label}と出たか（点数 ${s.score > 0 ? '+' : ''}${s.score}）`));
+  why.append(el('summary', 'gloss-summary', 'なぜそう言えるの？（計算の中身）'));
+  why.append(el('p', 'hint',
+    '生年月日時から出た8文字それぞれについて、あなたの本体を「助けるほう」か「削るほう」かを数えています。'
+    + '生まれた月はいちばん効くので3倍で数えます。'));
   const table = el('table');
   const body = el('tbody');
   for (const line of s.lines) {
@@ -159,45 +162,40 @@ function render(input) {
   }
   const total = el('tr', 'dominant');
   total.append(el('th', null, '合計'));
-  total.append(el('td', null, `±${s.band} の内なら中庸`));
+  total.append(el('td', null, `−${s.band}〜+${s.band} ならバランス型`));
   total.append(el('td', 'num', `${s.score > 0 ? '+' : ''}${s.score}`));
   body.append(total);
   table.append(body);
   why.append(table);
   why.append(el('p', 'hint',
-    `扶抑法による。月令を3倍に見て、残りの七字を1倍で足し引きし、地支に日主と同じ五行があれば通根として +1。`
-    + `境界（±${s.band}）からの余裕は ${s.margin}。`
-    + (s.margin < 1 ? '境界に近いので、流派や蔵干の扱いで逆の判定になりうる。' : '')
-    + '蔵干は v1 対象外なので、地支は表に出ている五行だけで数えている。'));
+    (s.margin < 1
+      ? '※ 境目にかなり近い結果です。流派によっては逆の判定になります。'
+      : '※ 境目からは離れているので、この判定は動きにくいほうです。')
+    + '地支の「隠れた干（蔵干）」までは数えていません。そこまで見る流派では、結果が変わることがあります。'));
   verdictSection.append(why);
   output.append(verdictSection);
 
-  /* --- the rest, in delivery order -------------------------------------- */
-  for (const [title, entries] of [
-    ['用神 — 何に寄せるか', [v.need]],
-    ['日主', [v.portrait]],
-    ['欠けているもの', [v.absence]],
-    ['今年', [v.year]],
-    ['どうするか', v.advice],
-  ]) {
-    const node = block(title, entries);
-    if (node) output.append(node);
+  /* --- the rest --- */
+  for (const entry of [v.need, v.portrait, v.absence, v.year, ...v.advice]) {
+    if (entry) output.append(passage(entry));
   }
 
-  /* --- honesty about the register --------------------------------------- */
+  /* --- honesty, also in plain words --- */
   const close = el('section', 'section');
-  close.append(el('h2', null, 'この読みについて'));
+  close.append(el('h2', 'plain-h2', 'この結果の読み方'));
   close.append(el('p', 'hint',
-    'ここに書いたものは全て、上の八字から引いている。出典は各文に付けてある。'
-    + 'ただし「盤にこう出ている」と「だからこの人はこうだ」のあいだには飛躍がある。'
-    + 'その飛躍こそが伝統の読みであり、検算できない部分でもある。'));
+    'ここに書いたことは全部、上の8文字から計算して出しています。'
+    + '各文の下にある小さいタグが、その文の根拠です。'));
   close.append(el('p', 'hint',
-    `当たっていると感じたら、その文の「およそN件に1件」を見てほしい。`
-    + `3件に1件の配置なら、同じ文が世の中の3分の1に当たっている。`
-    + `頻度は ${RARITY_SAMPLES.toLocaleString('ja-JP')} 件のランダムな命式から実測したもので、`
-    + `「統計に基づく」と言うだけで数字を出さない、ということはしていない。`));
+    'ただし「8文字がこうなっている」から「だからこういう人です」への飛躍は、'
+    + '計算ではなく昔からの解釈です。ここは検算できません。'));
+  close.append(el('p', 'hint',
+    `当たっていると感じたら、その文の「◯人に1人」を見てください。`
+    + `3人に1人と書いてあれば、同じ文が世の中の3分の1に当たっています。`
+    + `この数字は ${RARITY_SAMPLES.toLocaleString('ja-JP')} 人ぶんを実際に数えて出したもので、`
+    + `「統計に基づく」と言うだけで数字を出さない、ということはしていません。`));
   const back = el('p', 'hint');
-  const link = el('a', null, '検算できる盤のほうへ →');
+  const link = el('a', null, '計算の中身が見えるページへ →');
   link.href = 'index.html';
   back.append(link);
   close.append(back);
