@@ -113,13 +113,12 @@ python3 -m http.server 8000
 ## 検算
 
 ```
-node tools/
-  verify.mjs           検算（36項目）
-  reading-metrics.mjs  被覆率 × 弁別率
+node tools/verify.mjs              # 36項目。VERIFY.md を生成する
+node tools/reading-metrics.mjs     # 被覆率 × 弁別率
 ```
 
-`VERIFY.md` を生成する。国立天文台の公表値・Meeus の既知例・独立した2つの万年暦と
-突き合わせ、一つでも合わなければ非ゼロで終了する。
+国立天文台の公表値・Meeus の既知例・独立した2つの万年暦と突き合わせ、
+一つでも合わなければ非ゼロで終了する。
 
 ## v1 の対象外
 
