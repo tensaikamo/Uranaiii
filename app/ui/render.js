@@ -10,6 +10,7 @@
 import { calendarDate } from '../engine/swe.js';
 import { elementBalance, ELEMENTS, ELEMENT_NAMES } from '../engine/pillars.js';
 import { naturalFrequency } from '../engine/uncertainty.js';
+import { readChart } from '../engine/reading.js';
 
 const PILLAR_LABELS = [['year', '年'], ['month', '月'], ['day', '日'], ['hour', '時']];
 
@@ -427,6 +428,44 @@ export function buildBalanceElement(chart) {
 
   section.append(el('p', 'hint',
     `${balance.total}文字を数えたもの。多い少ないが何を意味するかは、盤が確定するまで書かない。`));
+  return section;
+}
+
+/* --- the reading (§8) ---------------------------------------------------- */
+
+/**
+ * Render the reading with its citations attached.
+ *
+ * The sources are shown, not tucked away. That is the point: a reader can hold
+ * every sentence against the board and check it. A sentence that could not be
+ * checked would have been destroyed in readChart before reaching here.
+ */
+export function buildReadingElement(chart) {
+  const section = el('section', 'section');
+  section.append(el('h2', null, '読み'));
+
+  const statements = readChart(chart);
+  if (statements.length === 0) {
+    section.append(el('p', 'hint', '盤に紐づく記述が立たなかった。空欄のままにする。'));
+    return section;
+  }
+
+  const list = el('div', 'reading');
+  for (const statement of statements) {
+    const item = el('div', 'reading-item');
+    item.append(el('p', 'reading-text', statement.text));
+    const cites = el('p', 'reading-source');
+    for (const src of statement.source) {
+      cites.append(el('span', 'cite', src));
+    }
+    item.append(cites);
+    list.append(item);
+  }
+  section.append(list);
+
+  section.append(el('p', 'hint',
+    '各文には出典を必ず付けてある。盤の要素に紐づかない文は、UIで隠すのではなく'
+    + '生成の段階で捨てている。誰にでも当てはまる文を個人向けの顔で出さないため。'));
   return section;
 }
 

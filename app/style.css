@@ -499,6 +499,38 @@ button.primary:active { background: rgba(201, 169, 97, 0.2); }
 .bg-metal { background: var(--el-metal); }
 .bg-water { background: var(--el-water); }
 
+/* --- the reading (§8) ---------------------------------------------------- */
+
+.reading { display: grid; gap: 14px; }
+.reading-item {
+  border-left: 2px solid var(--brass-dim);
+  padding: 2px 0 2px 13px;
+}
+.reading-text {
+  margin: 0;
+  font-family: var(--mincho);
+  font-size: 15px;
+  line-height: 1.9;
+  color: var(--ink);
+}
+/* The citations are quiet but never hidden — they are the guarantee. */
+.reading-source {
+  margin: 7px 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.cite {
+  font-family: var(--mono);
+  font-size: 10px;
+  line-height: 1.6;
+  color: var(--ink-faint);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  padding: 1px 6px;
+  white-space: nowrap;
+}
+
 /* --- the correction toggle ----------------------------------------------- */
 
 .correction {

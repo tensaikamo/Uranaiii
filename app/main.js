@@ -11,7 +11,7 @@ import { buildChart, computeAllVariants, analyseAxes, DEFAULT_AXES } from './eng
 import { resolveUncertainty, PRECISIONS, precisionMinutes } from './engine/uncertainty.js';
 import {
   el, buildChartElement, updateChartElement, buildStateElement, buildTermElement,
-  buildAxesElement, buildBudgetElement, buildBalanceElement, buildDialReadout, buildInspectLine, writeInspect,
+  buildAxesElement, buildBudgetElement, buildBalanceElement, buildReadingElement, buildDialReadout, buildInspectLine, writeInspect,
   formatJst, signedMinutes,
 } from './ui/render.js';
 import { buildDial, updateDial } from './ui/dial.js';
@@ -249,6 +249,7 @@ function refreshDownstream(input, axes) {
     buildStateElement(resolution),
     buildTermElement(chart),
     buildBalanceElement(chart),
+    buildReadingElement(chart),
     buildAxesElement(analysis),
     buildBudgetElement(chart, precisionMinutes(input.precision), deltaTSeconds(chart.time.ut)),
     buildTimeNotes(chart),

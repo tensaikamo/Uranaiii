@@ -14,6 +14,7 @@ import SwissEph from '../vendor/swisseph-wasm/src/swisseph.js';
 import { initEphemeris, ephemerisVersion, sunLongitude, equationOfTime, sunCrossing, julianDay, calendarDate, deltaTSeconds, withinEphemeris, EPHEMERIS_YEARS } from '../app/engine/swe.js';
 import { buildChart, buildChartAtOffset, DEFAULT_AXES } from '../app/engine/chart.js';
 import { resolveUncertainty } from '../app/engine/uncertainty.js';
+import { readChart, readingSignature } from '../app/engine/reading.js';
 import { trueTermPeriod, meanTermPeriod, degreesSinceRisshun, termPeriod, termIngresses, SETSU } from '../app/engine/terms.js';
 import { computePillars, TIGER_MONTH_STEM, RAT_HOUR_STEM, DAY_PILLAR_OFFSET, pillarFromIndex, STEMS, BRANCHES } from '../app/engine/pillars.js';
 import { japanOffsetHours } from '../app/engine/time.js';
@@ -461,6 +462,63 @@ const DAY_PILLARS = [
   }
   record('invariants', "the dial's 節入り list matches the pillars' own term period",
     mismatched === 0, `${checked - mismatched}/${checked} agree to within a minute`);
+}
+
+// --- §8  the reading layer --------------------------------------------------
+// The rule is absolute: no sentence without a source. It is checked two ways —
+// that no unsourced statement escapes, and that every cited character is
+// actually on the board, so a rule cannot cite something it invented.
+{
+  let seed = 4451;
+  const rnd = (a, b) => {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    return a + (seed % (b - a + 1));
+  };
+
+  let unsourced = 0;
+  let fabricated = 0;
+  let empty = 0;
+  const signatures = new Map();
+  const samples = 300;
+
+  for (let i = 0; i < samples; i += 1) {
+    const chart = buildChart({
+      year: rnd(1930, 2030), month: rnd(1, 12), day: rnd(1, 28),
+      hour: rnd(0, 23), minute: rnd(0, 59), precision: 'pm5',
+      longitude: 122 + rnd(0, 3200) / 100,
+    }, DEFAULT_AXES);
+
+    const onBoard = new Set();
+    for (const key of ['year', 'month', 'day', 'hour']) {
+      const p = chart.pillars[key];
+      if (p) { onBoard.add(p.stemChar); onBoard.add(p.branchChar); }
+    }
+
+    const statements = readChart(chart);
+    if (statements.length === 0) empty += 1;
+    for (const s of statements) {
+      if (!Array.isArray(s.source) || s.source.length === 0) { unsourced += 1; continue; }
+      for (const cite of s.source) {
+        // Citations that name a position on the board must name a character
+        // that is really there. element:/relation:/polarity: name no character.
+        const m = cite.match(/(?:_stem|_branch|干|支|counted):(.)$/);
+        if (m && !onBoard.has(m[1])) fabricated += 1;
+      }
+    }
+    signatures.set(readingSignature(statements), true);
+  }
+
+  record('reading (§8)', 'no statement escapes readChart without a source',
+    unsourced === 0, `${unsourced} unsourced statements across ${samples} charts`);
+  record('reading (§8)', 'every cited character is actually on the board',
+    fabricated === 0, `${fabricated} citations naming a character not in the chart`);
+  record('reading (§8)', 'every chart receives at least one sourced statement (被覆率)',
+    empty === 0, `${samples - empty}/${samples} charts covered`);
+
+  const discrimination = signatures.size / samples;
+  record('reading (§8)', 'readings discriminate between charts (弁別率, by source not text)',
+    discrimination > 0.8,
+    `${signatures.size}/${samples} distinct source-combinations = ${(discrimination * 100).toFixed(1)}%`);
 }
 
 // --- report -----------------------------------------------------------------
