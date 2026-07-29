@@ -20,6 +20,7 @@ import { strokesOf } from '../app/engine/strokes.js';
 import { fiveGrids, elementOfCount } from '../app/engine/name.js';
 import { luckDirection, luckPeriods, luckOnset } from '../app/engine/luck.js';
 import { hiddenStems, hiddenTable, TRIADS, NO_MIDDLE } from '../app/engine/hidden.js';
+import { timeline } from '../app/engine/timeline.js';
 import { judgeBoth } from '../app/engine/strength.js';
 import { judgeStrength } from '../app/engine/strength.js';
 import { frequencyOf } from '../app/engine/rarity.js';
@@ -756,6 +757,38 @@ const DAY_PILLARS = [
     typeof both.agrees === 'boolean' && both.alternative
     && both.useHidden === true && both.alternative.useHidden === false,
     `2000-01-01 03:00: 蔵干あり ${both.label}(${both.score}) / なし ${both.alternative.label}(${both.alternative.score}) — ${both.agrees ? '一致' : '不一致'}`);
+}
+
+// --- 時の欄 -----------------------------------------------------------------
+// The daily fortune must be built by the same engine as the natal chart: same
+// 立春 for the year, same 節入り for the month. Computing "today" on the civil
+// calendar while the natal reading uses solar terms would make the app
+// contradict itself a dozen times a year.
+{
+  const input = { year: 1990, month: 6, day: 15, hour: 6, minute: 20, precision: 'pm5', longitude: 141.79 };
+  const chart = buildChart(input, DEFAULT_AXES);
+  const strength = judgeBoth(chart.pillars);
+  // 2026-07-28 is 癸卯 per 国立天文台; the following day must be 甲辰.
+  const fixed = new Date(2026, 6, 29, 12, 0);
+  const t = timeline(input, strength, null, fixed);
+  const today = t.rows.find((r) => r.scale === '今日');
+  const thisYear = t.rows.find((r) => r.scale === '今年');
+  record('時の欄', "today's pillar comes from the same day-pillar engine",
+    today.pillar.text === '甲辰',
+    `2026-07-29 → ${today.pillar.text}（前日 2026-07-28 は国立天文台で癸卯）`);
+  record('時の欄', 'the year row turns at 立春, not 1 January',
+    thisYear.pillar.text === '丙午' && t.nowChart.pillars.solarYear === 2026,
+    `${t.nowChart.pillars.solarYear}年 ${thisYear.pillar.text}`);
+
+  // A January date before 立春 still belongs to the previous solar year.
+  const beforeRisshun = timeline(input, strength, null, new Date(2026, 0, 10, 12, 0));
+  record('時の欄', 'January before 立春 reads as the previous solar year',
+    beforeRisshun.nowChart.pillars.solarYear === 2025,
+    `2026-01-10 → ${beforeRisshun.nowChart.pillars.solarYear}年 ${beforeRisshun.rows.find((r) => r.scale === '今年').pillar.text}`);
+
+  record('時の欄', 'the 10-year row is omitted when no sex was given',
+    !t.rows.some((r) => r.scale === '10年'),
+    `rows: ${t.rows.map((r) => r.scale).join('・')}`);
 }
 
 // --- report -----------------------------------------------------------------

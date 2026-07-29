@@ -138,6 +138,21 @@ node tools/reading-metrics.mjs 1000
 
 年運は立春で切り替える。1月1日ではない。
 
+## 時の欄 — 同じ問いを4つの倍率で
+
+10年（大運）／今年／今月／今日を1本の列に並べる。問いはどれも同じ——
+**巡ってきているのは、この盤が必要とする五行か、消耗する五行か。**
+
+並べることが本体である。**追い風の10年の中の悪い日**と、**向かい風の10年の中の
+悪い日**は別の事実で、並べないと自分がどちらにいるか分からない。
+
+> 今日は木の日で、あなたには**向かい風**です。
+> ただ、上の段もそろって向かい風です。今日だけの問題ではないので、
+> 今日の不調を今日のせいにしないほうがいいです。長い向かい風の中の一日です。
+
+「今」の四柱も命式と同じ engine で立てる。年は立春で、月は節入りで切り替わる。
+**日運を暦の月日で計算したら、年に十数回、自分の命式と矛盾する。**
+
 ## 蔵干 — 支の中に隠れている干
 
 地支は一つの五行ではない。寅は名目上は木だが、甲（本気）・丙（中気）・戊（余気）を
@@ -252,7 +267,7 @@ python3 -m http.server 8000
 ## 検算
 
 ```
-node tools/verify.mjs              # 56項目。VERIFY.md を生成する
+node tools/verify.mjs              # 60項目。VERIFY.md を生成する
 node tools/reading-metrics.mjs     # 被覆率 × 弁別率
 node tools/build-rarity.mjs        # 各文の出現頻度を測り rarity.js を生成
 ```
@@ -286,6 +301,7 @@ app/
     voice.js        語り（別ページ）。人物評・助言・年運
     rarity.js       各文の出現頻度（生成物）
     hidden.js       蔵干。構造規則（余気＝前の支の本気、中気＝三合の相手）で検算
+    timeline.js     時の欄。10年/今年/今月/今日を同じ engine で
     luck.js         大運。順行/逆行、立運、10年ごとの追い風/向かい風
     name.js         姓名判断。五格と、命式の用神との接続
     strokes.js      画数表（生成物・KANJIDIC2 由来）
@@ -299,7 +315,7 @@ app/
   style.css
 vendor/swisseph-wasm/   同梱の天体暦（GPL）
 tools/
-  verify.mjs           検算（56項目）
+  verify.mjs           検算（60項目）
   reading-metrics.mjs  被覆率 × 弁別率
   build-rarity.mjs     出現頻度の実測
   build-strokes.mjs    KANJIDIC2 から画数表を生成

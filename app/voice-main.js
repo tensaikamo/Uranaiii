@@ -16,6 +16,7 @@ import { speak } from './engine/voice.js';
 import { peopleIn, ELEMENT_PLAIN } from './engine/plainwords.js';
 import { readName } from './engine/name.js';
 import { hiddenStems } from './engine/hidden.js';
+import { FIT_LABEL } from './engine/timeline.js';
 import { frequencyOf, RARITY_SAMPLES } from './engine/rarity.js';
 import { el } from './ui/render.js';
 import { startSky } from './ui/sky.js';
@@ -167,6 +168,25 @@ function render(input) {
     strip.append(cell);
   }
   output.append(strip);
+
+  /* --- 時の欄: today inside the year inside the decade ------------------- */
+  {
+    const section = el('section', 'section');
+    section.append(el('h2', 'plain-h2', v.when.title));
+    const grid = el('div', 'when');
+    for (const row of v.when.rows) {
+      const item = el('div', `when-row is-${row.fit}`);
+      item.append(el('span', 'when-scale', row.scale));
+      item.append(el('span', 'when-when', row.when));
+      item.append(el('span', 'when-pillar', row.pillar.text));
+      item.append(el('span', 'when-fit', FIT_LABEL[row.fit]));
+      grid.append(item);
+    }
+    section.append(grid);
+    section.append(prose(v.when.text));
+    section.append(citations(v.when));
+    output.append(section);
+  }
 
   /* --- 結論 + なぜ --- */
   const verdictSection = passage(v.verdict);

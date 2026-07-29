@@ -21,6 +21,7 @@
 import { ELEMENTS, elementBalance, pillarFromIndex } from './pillars.js';
 import { judgeBoth, yearFit } from './strength.js';
 import { luckPeriods, cycleAtAge, ageNow } from './luck.js';
+import { timeline, summariseTimeline } from './timeline.js';
 import { ELEMENT_PLAIN, VERDICT_PLAIN, STEM_PLAIN } from './plainwords.js';
 import { governingRisshun } from './terms.js';
 import { calendarDate } from './swe.js';
@@ -252,8 +253,18 @@ export function speak(chart, nowJdUt, input = {}) {
   const strength = judgeBoth(chart.pillars);
   const year = yearAhead(chart, strength, nowJdUt);
   const luck = luckPeriods(chart, strength, input.sex);
+  const when = timeline(input, strength, luck);
   return {
     strength,
+    when: {
+      title: '時の流れ — いま',
+      text: summariseTimeline(when.rows),
+      rows: when.rows,
+      source: [`day_pillar_today:${when.rows[when.rows.length - 1].pillar.text}`,
+        `judgement:${VERDICT_PLAIN[strength.verdict].term}`,
+        ...strength.needed.map((e) => `needed:${name(e)}`)],
+      key: `today:${when.rows[when.rows.length - 1].fit}`,
+    },
     luck: luckPassage(chart, strength, input, luck),
     type: typeName(chart),
     verdict: verdictPassage(chart, strength),
@@ -268,6 +279,6 @@ export function speak(chart, nowJdUt, input = {}) {
 /** Every passage, flattened — for the anti-Barnum measurement. */
 export function voiceStatements(chart, nowJdUt, input = {}) {
   const v = speak(chart, nowJdUt, input);
-  return [v.type, v.verdict, v.need, v.portrait, v.absence, v.year, v.luck, ...v.advice]
+  return [v.type, v.verdict, v.need, v.portrait, v.absence, v.year, v.luck, v.when, ...v.advice]
     .filter((s) => s && Array.isArray(s.source) && s.source.length > 0);
 }

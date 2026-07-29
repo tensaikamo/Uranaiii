@@ -213,6 +213,7 @@ export const RARITY = {
   "dominant:金:4": 0.0656,
   "monthCommand:金比和": 0.0657,
   "monthCommand:水剋火": 0.0669,
+  "today:neutral": 0.06905,
   "luck:neutral": 0.07005,
   "need:strong:木金水": 0.0704,
   "portrait:辛:strong": 0.0712,
@@ -263,6 +264,7 @@ export const RARITY = {
   "dominant:土:3": 0.21565,
   "verdict:neutral": 0.23335,
   "advicePlace:neutral": 0.23335,
+  "today:avoided": 0.2566,
   "year:avoided": 0.3453,
   "adviceYear:avoided": 0.3453,
   "boardVerdict:strong": 0.3638,
@@ -274,7 +276,8 @@ export const RARITY = {
   "luck:needed": 0.42055,
   "boardVerdict:weak": 0.44115,
   "year:needed": 0.58225,
-  "adviceYear:needed": 0.58225
+  "adviceYear:needed": 0.58225,
+  "today:needed": 0.67435
 };
 
 /** Frequency of a statement key, or null when it was never measured. */
