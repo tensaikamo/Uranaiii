@@ -20,6 +20,7 @@
 
 import { ELEMENTS, elementBalance, pillarFromIndex } from './pillars.js';
 import { judgeStrength, yearFit } from './strength.js';
+import { luckPeriods, cycleAtAge, ageNow } from './luck.js';
 import { ELEMENT_PLAIN, VERDICT_PLAIN, STEM_PLAIN } from './plainwords.js';
 import { governingRisshun } from './terms.js';
 import { calendarDate } from './swe.js';
@@ -163,6 +164,57 @@ export function yearAhead(chart, strength, nowJdUt) {
   };
 }
 
+/* --- 大運 — the first thing that can say *when* --------------------------- */
+
+function luckPassage(chart, strength, input, luck) {
+  if (!luck) return null;
+  const age = ageNow(input);
+  const current = cycleAtAge(luck, age);
+  const label = { needed: '追い風', avoided: '向かい風', neutral: '平年続き' };
+
+  // Where the wind next changes — the fact a reader is actually after.
+  const nextNeeded = luck.periods.find((p) => p.fit === 'needed' && p.fromAge > age);
+  const leavingAt = current && current.fit !== 'neutral'
+    ? `この10年が終わるのは${current.toAge}歳。` : '';
+
+  let body;
+  if (!current) {
+    body = `大運はまだ始まっていません。最初の10年が始まるのは${luck.onset.years}歳${luck.onset.months}ヶ月からです。`;
+  } else {
+    body = `いまは**${current.fromAge}〜${current.toAge}歳の${current.pillar.text}**。`
+      + `巡っている五行は${name(current.pillar.stemElement)}で、あなたには**${label[current.fit]}**の10年です。${leavingAt}`;
+  }
+
+  if (nextNeeded) {
+    body += `
+
+次に追い風の10年が来るのは**${nextNeeded.fromAge}歳から**（${nextNeeded.pillar.text}・${name(nextNeeded.pillar.stemElement)}）。`
+      + `${nextNeeded.fromAge - age}年先です。`;
+  } else if (current && current.fit === 'needed') {
+    body += `
+
+いまがその追い風です。`;
+  } else {
+    body += `
+
+この先の表に、追い風の10年は出てきません。年ごとの巡り（今年の欄）のほうで拾っていく形になります。`;
+  }
+
+  return {
+    title: '10年ごとの流れ',
+    term: luck.direction === 'forward' ? '大運・順行' : '大運・逆行',
+    text: body,
+    source: [`month_pillar:${chart.pillars.month.text}`,
+      `direction:${luck.direction === 'forward' ? '順行' : '逆行'}`,
+      `立運:${luck.onset.years}歳${luck.onset.months}ヶ月`,
+      ...(current ? [`current:${current.pillar.text}`, `fit:${current.fit}`] : [])],
+    key: `luck:${current ? current.fit : 'before'}`,
+    luck,
+    current,
+    age,
+  };
+}
+
 /* --- どうするか ----------------------------------------------------------- */
 
 function advicePassages(strength, year) {
@@ -190,11 +242,13 @@ function advicePassages(strength, year) {
 
 /* --- assembly ------------------------------------------------------------- */
 
-export function speak(chart, nowJdUt) {
+export function speak(chart, nowJdUt, input = {}) {
   const strength = judgeStrength(chart.pillars);
   const year = yearAhead(chart, strength, nowJdUt);
+  const luck = luckPeriods(chart, strength, input.sex);
   return {
     strength,
+    luck: luckPassage(chart, strength, input, luck),
     type: typeName(chart),
     verdict: verdictPassage(chart, strength),
     need: needPassage(strength),
@@ -206,8 +260,8 @@ export function speak(chart, nowJdUt) {
 }
 
 /** Every passage, flattened — for the anti-Barnum measurement. */
-export function voiceStatements(chart, nowJdUt) {
-  const v = speak(chart, nowJdUt);
-  return [v.type, v.verdict, v.need, v.portrait, v.absence, v.year, ...v.advice]
+export function voiceStatements(chart, nowJdUt, input = {}) {
+  const v = speak(chart, nowJdUt, input);
+  return [v.type, v.verdict, v.need, v.portrait, v.absence, v.year, v.luck, ...v.advice]
     .filter((s) => s && Array.isArray(s.source) && s.source.length > 0);
 }

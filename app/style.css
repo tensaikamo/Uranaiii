@@ -590,6 +590,39 @@ button.primary:active { background: rgba(201, 169, 97, 0.2); }
 .gloss th { font-family: var(--mincho); font-size: 14px; color: var(--ink); white-space: nowrap; padding-right: 12px; }
 .gloss td { font-size: 11.5px; color: var(--ink-dim); line-height: 1.75; }
 
+/* --- 大運 timeline ------------------------------------------------------- */
+
+.luck { display: grid; gap: 3px; margin: 4px 0 14px; }
+.luck-row {
+  display: grid;
+  grid-template-columns: 78px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 11px;
+  border-left: 3px solid var(--ink-faint);
+  background: rgba(18, 27, 40, 0.4);
+  border-radius: 0 2px 2px 0;
+  font-size: 12.5px;
+}
+.luck-row.is-needed { border-left-color: var(--el-wood); }
+.luck-row.is-avoided { border-left-color: var(--el-fire); }
+.luck-row.is-neutral { border-left-color: var(--ink-faint); }
+.luck-row.is-now {
+  background: rgba(201, 169, 97, 0.14);
+  box-shadow: inset 0 0 0 1px var(--brass-dim);
+}
+.luck-age { font-family: var(--mono); color: var(--ink-dim); font-size: 11.5px; }
+.luck-pillar { font-family: var(--mincho); font-size: 17px; letter-spacing: 0.1em; }
+.luck-fit { font-size: 11.5px; color: var(--ink-dim); }
+.luck-row.is-needed .luck-fit { color: var(--el-wood); }
+.luck-row.is-avoided .luck-fit { color: var(--el-fire); }
+.luck-now {
+  grid-column: 1 / -1;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--brass);
+}
+
 /* --- 語り page ----------------------------------------------------------- */
 
 /* States the change of register before anything else on the page. */

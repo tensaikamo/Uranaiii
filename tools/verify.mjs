@@ -18,6 +18,8 @@ import { readChart, readingSignature } from '../app/engine/reading.js';
 import { voiceStatements } from '../app/engine/voice.js';
 import { strokesOf } from '../app/engine/strokes.js';
 import { fiveGrids, elementOfCount } from '../app/engine/name.js';
+import { luckDirection, luckPeriods, luckOnset } from '../app/engine/luck.js';
+import { judgeStrength } from '../app/engine/strength.js';
 import { frequencyOf } from '../app/engine/rarity.js';
 import { trueTermPeriod, meanTermPeriod, degreesSinceRisshun, termPeriod, termIngresses, SETSU } from '../app/engine/terms.js';
 import { computePillars, TIGER_MONTH_STEM, RAT_HOUR_STEM, DAY_PILLAR_OFFSET, pillarFromIndex, STEMS, BRANCHES } from '../app/engine/pillars.js';
@@ -545,11 +547,13 @@ const DAY_PILLARS = [
   const samples = 300;
 
   for (let i = 0; i < samples; i += 1) {
-    const chart = buildChart({
+    const input = {
       year: rnd(1930, 2030), month: rnd(1, 12), day: rnd(1, 28),
       hour: rnd(0, 23), minute: rnd(0, 59), precision: 'pm5',
       longitude: 122 + rnd(0, 3200) / 100,
-    }, DEFAULT_AXES);
+      sex: rnd(0, 1) === 0 ? 'male' : 'female',
+    };
+    const chart = buildChart(input, DEFAULT_AXES);
 
     const onBoard = new Set();
     for (const key of ['year', 'month', 'day', 'hour']) {
@@ -557,7 +561,7 @@ const DAY_PILLARS = [
       if (p) { onBoard.add(p.stemChar); onBoard.add(p.branchChar); }
     }
 
-    const passages = voiceStatements(chart, nowJd);
+    const passages = voiceStatements(chart, nowJd, input);
     for (const s of passages) {
       if (!Array.isArray(s.source) || s.source.length === 0) { unsourced += 1; continue; }
       for (const cite of s.source) {
@@ -623,6 +627,68 @@ const DAY_PILLARS = [
   record('姓名判断', '画数 maps to 五行 by its last digit',
     elements === 'water,wood,wood,fire,fire,earth,earth,metal,metal,water',
     '10水 1,2木 3,4火 5,6土 7,8金 9水');
+}
+
+// --- 大運 -------------------------------------------------------------------
+// 陽男陰女 run forward, 陰男陽女 run back; 立運 counts days to the bracketing
+// 節入り and divides by three. Both are checked against worked examples.
+{
+  // 甲 is stem 0 (陽), 乙 is 1 (陰).
+  const dirs = [
+    [0, 'male', 'forward'], [0, 'female', 'reverse'],
+    [1, 'male', 'reverse'], [1, 'female', 'forward'],
+  ];
+  const wrong = dirs.filter(([stem, sex, want]) => luckDirection(stem, sex) !== want);
+  record('大運', '順行／逆行 follows 陽男陰女',
+    wrong.length === 0,
+    wrong.length === 0 ? '陽男・陰女=順行、陰男・陽女=逆行 — 4/4' : JSON.stringify(wrong));
+
+  const input = { year: 1990, month: 6, day: 15, hour: 6, minute: 20, precision: 'pm5', longitude: 141.79 };
+  const chart = buildChart(input, DEFAULT_AXES);
+  const strength = judgeStrength(chart.pillars);
+
+  // 1990-06-15 06:20 JST: 年干 庚 (陽). Male runs forward to 小暑, female back
+  // to 芒種 — the two directions must land on different terms and ages.
+  const male = luckPeriods(chart, strength, 'male');
+  const female = luckPeriods(chart, strength, 'female');
+  const forwardDays = chart.pillars.period.end - chart.time.ut;
+  const reverseDays = chart.time.ut - chart.pillars.period.start;
+  record('大運', '立運 counts to the correct 節入り in each direction',
+    male.direction === 'forward' && female.direction === 'reverse'
+      && Math.abs(male.onset.days - forwardDays) < 1e-9
+      && Math.abs(female.onset.days - reverseDays) < 1e-9,
+    `順行 ${male.onset.days.toFixed(2)}日→${male.onset.years}歳${male.onset.months}ヶ月、`
+    + `逆行 ${female.onset.days.toFixed(2)}日→${female.onset.years}歳${female.onset.months}ヶ月`);
+
+  // Three days to a year, one leftover day to four months.
+  const check = (days) => {
+    const y = Math.floor(days / 3);
+    return { y, m: Math.round((days - y * 3) * 4) };
+  };
+  const a = check(male.onset.days);
+  record('大運', '3日で1年、余り1日で4ヶ月',
+    male.onset.years === a.y && male.onset.months === a.m,
+    `${male.onset.days.toFixed(2)}日 = ${a.y}年${a.m}ヶ月`);
+
+  // The cycles step through the sexagenary order from the month pillar, ten
+  // years apart, in the right direction.
+  const steps = male.periods;
+  const contiguous = steps.every((p, i) => i === 0 || p.fromAge === steps[i - 1].toAge);
+  const forwardOrder = steps.every((p, i) => i === 0
+    || ((p.pillar.stem - steps[i - 1].pillar.stem + 10) % 10 === 1
+      && (p.pillar.branch - steps[i - 1].pillar.branch + 12) % 12 === 1));
+  record('大運', 'cycles are contiguous and step one place through the 60-cycle',
+    contiguous && forwardOrder,
+    `${steps[0].pillar.text} → ${steps[1].pillar.text} → ${steps[2].pillar.text} …、10年刻み`);
+
+  const reverseOrder = female.periods.every((p, i) => i === 0
+    || ((female.periods[i - 1].pillar.stem - p.pillar.stem + 10) % 10 === 1));
+  record('大運', '逆行 walks the cycle backwards',
+    reverseOrder,
+    `${female.periods[0].pillar.text} → ${female.periods[1].pillar.text} → ${female.periods[2].pillar.text} …`);
+
+  record('大運', 'declining to give a sex omits 大運 rather than guessing',
+    luckPeriods(chart, strength, null) === null, 'returns null, and the page says why');
 }
 
 // --- report -----------------------------------------------------------------

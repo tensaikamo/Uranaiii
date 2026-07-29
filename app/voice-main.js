@@ -25,6 +25,25 @@ const boot = document.getElementById('boot');
 const form = document.getElementById('form');
 const output = document.getElementById('output');
 
+const state = { sex: null };
+
+// 性別 is a parameter of the 大運 rule, not a claim about the reader, so it is
+// asked for in those terms and can be declined without losing the rest.
+{
+  const holder = document.getElementById('sex');
+  for (const [value, label] of [['male', '男性'], ['female', '女性'], [null, '答えない']]) {
+    const button = el('button', 'choice', label);
+    button.type = 'button';
+    button.setAttribute('aria-pressed', String(state.sex === value));
+    button.addEventListener('click', () => {
+      state.sex = value;
+      for (const other of holder.children) other.setAttribute('aria-pressed', 'false');
+      button.setAttribute('aria-pressed', 'true');
+    });
+    holder.append(button);
+  }
+}
+
 try {
   await initEphemeris();
   boot.hidden = true;
@@ -57,6 +76,7 @@ form.addEventListener('submit', (event) => {
 
   try {
     render({
+      sex: state.sex,
       surname: document.getElementById('surname').value,
       given: document.getElementById('given').value,
       year, month, day, hour, minute,
@@ -114,7 +134,7 @@ function render(input) {
     now.getUTCFullYear(), now.getUTCMonth() + 1, now.getUTCDate(),
     now.getUTCHours() + now.getUTCMinutes() / 60,
   );
-  const v = speak(chart, nowJdUt);
+  const v = speak(chart, nowJdUt, input);
   const s = v.strength;
 
   /* --- 名前 --- */
@@ -181,6 +201,35 @@ function render(input) {
   /* --- the rest --- */
   for (const entry of [v.need, v.portrait, v.absence, v.year]) {
     if (entry) output.append(passage(entry));
+  }
+
+  /* --- 大運: the timeline ------------------------------------------------ */
+  if (v.luck) {
+    const section = passage(v.luck);
+    const list = el('div', 'luck');
+    for (const p of v.luck.luck.periods) {
+      const row = el('div', `luck-row is-${p.fit}${p === v.luck.current ? ' is-now' : ''}`);
+      row.append(el('span', 'luck-age',
+        `${p.fromAge}〜${p.toAge}歳`));
+      row.append(el('span', 'luck-pillar', p.pillar.text));
+      row.append(el('span', 'luck-fit',
+        { needed: '追い風', avoided: '向かい風', neutral: '平' }[p.fit]));
+      if (p === v.luck.current) row.append(el('span', 'luck-now', `いま ${v.luck.age}歳`));
+      list.append(row);
+    }
+    section.insertBefore(list, section.querySelector('.reading-source'));
+    section.append(el('p', 'hint',
+      `最初の10年が始まるのは ${v.luck.luck.onset.years}歳${v.luck.luck.onset.months}ヶ月。`
+      + `生まれてから${v.luck.luck.onset.fromTerm}まで ${v.luck.luck.onset.days.toFixed(1)}日あり、`
+      + `3日を1年として数えた結果です（余り1日＝4ヶ月）。端数の丸め方は流派で違います。`));
+    output.append(section);
+  } else if (state.sex === null) {
+    const note = el('section', 'section');
+    note.append(el('h2', 'plain-h2', '10年ごとの流れ'));
+    note.append(el('p', 'hint',
+      '大運（10年ごとの運）は、向きが「陽の年に生まれた男性は順行、女性は逆行」という規則で決まるため、'
+      + '性別を選ばないと計算できません。上で選ぶと、追い風の10年がいつ来るかが出ます。'));
+    output.append(note);
   }
 
   /* --- 姓名判断, when a name was given ---------------------------------- */

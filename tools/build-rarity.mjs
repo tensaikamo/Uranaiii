@@ -45,11 +45,13 @@ const rnd = (a, b) => {
 const counts = new Map();
 
 for (let i = 0; i < SAMPLES; i += 1) {
-  const chart = buildChart({
+  const input = {
     year: rnd(1930, 2030), month: rnd(1, 12), day: rnd(1, 28),
     hour: rnd(0, 23), minute: rnd(0, 59), precision: 'pm5',
     longitude: 122 + rnd(0, 3200) / 100,
-  }, DEFAULT_AXES);
+    sex: rnd(0, 1) === 0 ? 'male' : 'female',
+  };
+  const chart = buildChart(input, DEFAULT_AXES);
 
   // A chart counts once per distinct key, not once per statement, so a rule
   // that fires twice on one chart does not inflate its own frequency.
@@ -57,7 +59,7 @@ for (let i = 0; i < SAMPLES; i += 1) {
   // frequencies, and it needs them most.
   const seen = new Set([
     ...rawStatements(chart).map((s) => s.key),
-    ...voiceStatements(chart, nowJdUt).map((s) => s.key),
+    ...voiceStatements(chart, nowJdUt, input).map((s) => s.key),
   ]);
   for (const key of seen) counts.set(key, (counts.get(key) || 0) + 1);
 }
