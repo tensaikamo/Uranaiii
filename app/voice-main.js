@@ -15,6 +15,7 @@ import { buildChart, DEFAULT_AXES } from './engine/chart.js';
 import { speak } from './engine/voice.js';
 import { peopleIn, ELEMENT_PLAIN } from './engine/plainwords.js';
 import { readName } from './engine/name.js';
+import { hiddenStems } from './engine/hidden.js';
 import { frequencyOf, RARITY_SAMPLES } from './engine/rarity.js';
 import { el } from './ui/render.js';
 import { startSky } from './ui/sky.js';
@@ -190,11 +191,31 @@ function render(input) {
   body.append(total);
   table.append(body);
   why.append(table);
+  // The hidden stems, so the branch rows above are not a black box.
+  const zk = el('table');
+  const zkBody = el('tbody');
+  for (const [key, label] of [['year', '年'], ['month', '月'], ['day', '日'], ['hour', '時']]) {
+    const pil = chart.pillars[key];
+    if (!pil) continue;
+    const tr = el('tr');
+    tr.append(el('th', null, `${label}支 ${pil.branchChar}`));
+    tr.append(el('td', null,
+      hiddenStems(pil.branchChar).map((h) => `${h.role} ${h.stemChar}`).join('／')));
+    zkBody.append(tr);
+  }
+  zk.append(zkBody);
+  why.append(el('p', 'hint',
+    'それぞれの支の中に隠れている干（蔵干）は、こうです。'
+    + '本気がいちばん強く、中気、余気の順に弱くなります。'));
+  why.append(zk);
+
   why.append(el('p', 'hint',
     (s.margin < 1
       ? '※ 境目にかなり近い結果です。流派によっては逆の判定になります。'
       : '※ 境目からは離れているので、この判定は動きにくいほうです。')
-    + '地支の「隠れた干（蔵干）」までは数えていません。そこまで見る流派では、結果が変わることがあります。'));
+    + (s.agrees
+      ? '蔵干を数えても数えなくても、同じ判定になりました。'
+      : `蔵干を数えないと ${s.alternative.label}（${s.alternative.score}）になります。流派で割れる命式です。`)));
   verdictSection.append(why);
   output.append(verdictSection);
 

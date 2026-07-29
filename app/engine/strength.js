@@ -16,17 +16,25 @@
  *   3. 生助   the other characters that share or generate the day master
  *   4. 洩剋   the other characters that drain, control, or are controlled
  *
- * Simplification, stated plainly: 蔵干 is out of scope for v1, so only the
- * visible element of each branch is counted. A full reading weighs the hidden
- * stems too, and near the boundary that can move the verdict. The score is
- * therefore always shown, never just the label — a reader can see how close to
- * the line they are, which is the same honesty the error bars apply to time.
+ * 蔵干 is an option, not a silent choice. A branch is not one element — 寅
+ * carries 甲, 丙 and 戊 — and counting only the nominal element counts a third
+ * of what is there. But which hidden stems a branch holds is school-variant, so
+ * the calculation runs **both ways** and the reading says whether the verdict
+ * survives the difference. That is the same treatment §4 gives 定気/恒気: the
+ * branch point is shown, not hidden behind a default.
+ *
+ * Each branch is worth 1 in total either way, so turning 蔵干 on does not
+ * rescale the score and the two runs stay comparable.
+ *
+ * The score is always shown, never just the label — a reader can see how close
+ * to the line they are, which is the same honesty the error bars apply to time.
  *
  * Schools differ on the weights. These are stated as constants rather than
  * buried in the arithmetic, so a disagreement can be located and argued with.
  */
 
 import { ELEMENTS, ELEMENT_NAMES, elementBalance } from './pillars.js';
+import { hiddenStems } from './hidden.js';
 
 const GENERATES = { wood: 'fire', fire: 'earth', earth: 'metal', metal: 'water', water: 'wood' };
 const CONTROLS = { wood: 'earth', earth: 'water', water: 'fire', fire: 'metal', metal: 'wood' };
@@ -58,7 +66,7 @@ function contribution(me, other) {
  * Returns the verdict, the score, every line of the arithmetic that produced
  * it, and the elements the chart needs and should avoid.
  */
-export function judgeStrength(pillars) {
+export function judgeStrength(pillars, { useHidden = false } = {}) {
   const day = pillars.day;
   const me = day.stemElement;
   const lines = [];
@@ -66,16 +74,33 @@ export function judgeStrength(pillars) {
 
   // 1. 月令 — the season.
   const season = pillars.month.branchElement;
-  const seasonPart = contribution(me, season);
-  const seasonScore = seasonPart.score * SEASON_WEIGHT;
-  score += seasonScore;
-  lines.push({
-    label: `月支 ${pillars.month.branchChar}（${el(season)}）`,
-    detail: `月令。${seasonPart.note}`,
-    relation: seasonPart.relation,
-    score: seasonScore,
-    source: [`month_branch:${pillars.month.branchChar}`, `relation:${seasonPart.relation}`],
-  });
+  if (useHidden) {
+    let seasonScore = 0;
+    const parts = [];
+    for (const h of hiddenStems(pillars.month.branchChar)) {
+      seasonScore += contribution(me, h.element).score * h.share * SEASON_WEIGHT;
+      parts.push(`${h.role}${h.stemChar}(${el(h.element)})`);
+    }
+    score += seasonScore;
+    lines.push({
+      label: `月支 ${pillars.month.branchChar}（蔵干）`,
+      detail: `月令。${parts.join('・')} を3倍で数える`,
+      relation: '蔵干',
+      score: Number(seasonScore.toFixed(2)),
+      source: [`month_branch:${pillars.month.branchChar}`, 'relation:蔵干'],
+    });
+  } else {
+    const seasonPart = contribution(me, season);
+    const seasonScore = seasonPart.score * SEASON_WEIGHT;
+    score += seasonScore;
+    lines.push({
+      label: `月支 ${pillars.month.branchChar}（${el(season)}）`,
+      detail: `月令。${seasonPart.note}`,
+      relation: seasonPart.relation,
+      score: seasonScore,
+      source: [`month_branch:${pillars.month.branchChar}`, `relation:${seasonPart.relation}`],
+    });
+  }
 
   // 2. Every other character except the day stem itself and the month branch,
   //    which was already weighed as the season.
@@ -83,10 +108,30 @@ export function judgeStrength(pillars) {
   for (const [key, label] of [['year', '年'], ['month', '月'], ['day', '日'], ['hour', '時']]) {
     const p = pillars[key];
     if (!p) continue;
-    if (key !== 'day') others.push({ char: p.stemChar, element: p.stemElement, label: `${label}干`, cite: `${key}_stem` });
-    if (key !== 'month') others.push({ char: p.branchChar, element: p.branchElement, label: `${label}支`, cite: `${key}_branch` });
+    if (key !== 'day') others.push({ char: p.stemChar, element: p.stemElement, label: `${label}干`, cite: `${key}_stem`, isBranch: false });
+    if (key !== 'month') others.push({ char: p.branchChar, element: p.branchElement, label: `${label}支`, cite: `${key}_branch`, isBranch: true });
   }
   for (const o of others) {
+    if (useHidden && o.isBranch) {
+      // Spend the branch's single unit of weight across the stems it hides.
+      const stems = hiddenStems(o.char);
+      let branchScore = 0;
+      const parts = [];
+      for (const h of stems) {
+        const part = contribution(me, h.element);
+        branchScore += part.score * h.share * CHARACTER_WEIGHT;
+        parts.push(`${h.role}${h.stemChar}(${el(h.element)})`);
+      }
+      score += branchScore;
+      lines.push({
+        label: `${o.label} ${o.char}（蔵干）`,
+        detail: `${parts.join('・')} をまとめて数える`,
+        relation: '蔵干',
+        score: Number(branchScore.toFixed(2)),
+        source: [`${o.cite}:${o.char}`, 'relation:蔵干'],
+      });
+      continue;
+    }
     const part = contribution(me, o.element);
     const value = part.score * CHARACTER_WEIGHT;
     score += value;
@@ -103,7 +148,10 @@ export function judgeStrength(pillars) {
   const rootedIn = [];
   for (const [key, label] of [['year', '年'], ['month', '月'], ['day', '日'], ['hour', '時']]) {
     const p = pillars[key];
-    if (p && p.branchElement === me) rootedIn.push({ label: `${label}支`, char: p.branchChar, cite: `${key}_branch` });
+    const roots = useHidden
+      ? hiddenStems(p.branchChar).some((h) => h.element === me)
+      : p.branchElement === me;
+    if (roots) rootedIn.push({ label: `${label}支`, char: p.branchChar, cite: `${key}_branch` });
   }
   if (rootedIn.length > 0) {
     score += ROOT_BONUS;
@@ -153,9 +201,27 @@ export function judgeStrength(pillars) {
     avoided,
     rooted: rootedIn.length > 0,
     counts,
+    useHidden,
     // How near the line the verdict sits. A chart at 1.5 is a different claim
     // from one at 7, and saying so is the same courtesy the error bars extend.
     margin: Number((Math.abs(score) - NEUTRAL_BAND).toFixed(1)),
+  };
+}
+
+/**
+ * Judge both ways and say whether the verdict survives the 蔵干 question.
+ *
+ * The default stays the 蔵干-on reading, because counting a branch as one
+ * element is the cruder of the two. What matters is that when the two disagree
+ * the reading says so, rather than presenting one school's answer as the answer.
+ */
+export function judgeBoth(pillars) {
+  const withHidden = judgeStrength(pillars, { useHidden: true });
+  const withoutHidden = judgeStrength(pillars, { useHidden: false });
+  return {
+    ...withHidden,
+    alternative: withoutHidden,
+    agrees: withHidden.verdict === withoutHidden.verdict,
   };
 }
 

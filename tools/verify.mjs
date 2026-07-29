@@ -19,10 +19,12 @@ import { voiceStatements } from '../app/engine/voice.js';
 import { strokesOf } from '../app/engine/strokes.js';
 import { fiveGrids, elementOfCount } from '../app/engine/name.js';
 import { luckDirection, luckPeriods, luckOnset } from '../app/engine/luck.js';
+import { hiddenStems, hiddenTable, TRIADS, NO_MIDDLE } from '../app/engine/hidden.js';
+import { judgeBoth } from '../app/engine/strength.js';
 import { judgeStrength } from '../app/engine/strength.js';
 import { frequencyOf } from '../app/engine/rarity.js';
 import { trueTermPeriod, meanTermPeriod, degreesSinceRisshun, termPeriod, termIngresses, SETSU } from '../app/engine/terms.js';
-import { computePillars, TIGER_MONTH_STEM, RAT_HOUR_STEM, DAY_PILLAR_OFFSET, pillarFromIndex, STEMS, BRANCHES } from '../app/engine/pillars.js';
+import { computePillars, TIGER_MONTH_STEM, RAT_HOUR_STEM, DAY_PILLAR_OFFSET, pillarFromIndex, STEMS, BRANCHES, STEM_ELEMENT } from '../app/engine/pillars.js';
 import { japanOffsetHours } from '../app/engine/time.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -689,6 +691,71 @@ const DAY_PILLARS = [
 
   record('大運', 'declining to give a sex omits 大運 rather than guessing',
     luckPeriods(chart, strength, null) === null, 'returns null, and the page says why');
+}
+
+// --- 蔵干 -------------------------------------------------------------------
+// The table is hand-entered, so it is re-derived from its two structural rules
+// rather than trusted. A typo here would silently bend every strength verdict.
+{
+  const table = hiddenTable();
+  const byBranch = Object.fromEntries(table.map((t) => [t.branch, t.stems]));
+  const stemElement = (ch) => STEM_ELEMENT[STEMS.indexOf(ch)];
+
+  // 余気 = the 本気 of the branch before it, all the way round the cycle.
+  const tailMisses = [];
+  for (const [i, ch] of BRANCHES.entries()) {
+    const prev = BRANCHES[(i + 11) % 12];
+    const tail = byBranch[ch].find((h) => h.role === '余気');
+    const prevMain = byBranch[prev].find((h) => h.role === '本気');
+    if (!tail || stemElement(tail.stemChar) !== stemElement(prevMain.stemChar)) {
+      tailMisses.push(`${ch}の余気${tail ? tail.stemChar : 'なし'} vs ${prev}の本気${prevMain.stemChar}`);
+    }
+  }
+  record('蔵干', '余気 is the previous branch\'s 本気, for all twelve',
+    tailMisses.length === 0,
+    tailMisses.length === 0 ? '子←亥, 丑←子, 寅←丑 … 亥←戌 — 12/12' : tailMisses.join('; '));
+
+  // 中気 = the element the branch's 三合 triad pools on.
+  const midMisses = [];
+  for (const triad of TRIADS) {
+    for (const ch of triad.branches) {
+      const mid = byBranch[ch].find((h) => h.role === '中気');
+      if (NO_MIDDLE.includes(ch)) {
+        if (mid) midMisses.push(`${ch} should have no 中気`);
+        continue;
+      }
+      if (ch === '午') continue; // 午 is the documented exception: 己.
+      if (!mid || mid.element !== triad.element) {
+        midMisses.push(`${ch}の中気${mid ? mid.stemChar : 'なし'} vs 三合${triad.element}`);
+      }
+    }
+  }
+  record('蔵干', '中気 is the 三合局 partner (四正 excepted)',
+    midMisses.length === 0,
+    midMisses.length === 0 ? '寅午戌=火, 申子辰=水, 亥卯未=木, 巳酉丑=金 — all agree' : midMisses.join('; '));
+
+  // Every branch is worth exactly 1, so the two strength runs stay comparable.
+  const badShare = BRANCHES.filter((ch) => {
+    const sum = hiddenStems(ch).reduce((t, h) => t + h.share, 0);
+    return Math.abs(sum - 1) > 1e-9;
+  });
+  record('蔵干', 'each branch carries a total weight of exactly 1',
+    badShare.length === 0,
+    badShare.length === 0 ? '2支は0.7/0.3、3支は0.6/0.25/0.15 — 12/12 sum to 1' : badShare.join(', '));
+
+  // Every hidden stem is a real stem.
+  const unknown = BRANCHES.flatMap((ch) => hiddenStems(ch).filter((h) => h.stem < 0).map((h) => `${ch}:${h.stemChar}`));
+  record('蔵干', 'every hidden stem is one of the ten',
+    unknown.length === 0, unknown.length === 0 ? 'all resolve to 甲…癸' : unknown.join(', '));
+
+  // Turning 蔵干 on must not silently rescale the score, and when the two runs
+  // disagree the reading has to be able to say so.
+  const chart = buildChart({ year: 2000, month: 1, day: 1, hour: 3, minute: 0, precision: 'pm5', longitude: 141.79 }, DEFAULT_AXES);
+  const both = judgeBoth(chart.pillars);
+  record('蔵干', 'both readings are computed and disagreement is reported',
+    typeof both.agrees === 'boolean' && both.alternative
+    && both.useHidden === true && both.alternative.useHidden === false,
+    `2000-01-01 03:00: 蔵干あり ${both.label}(${both.score}) / なし ${both.alternative.label}(${both.alternative.score}) — ${both.agrees ? '一致' : '不一致'}`);
 }
 
 // --- report -----------------------------------------------------------------

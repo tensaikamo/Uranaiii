@@ -19,7 +19,7 @@
  */
 
 import { ELEMENTS, elementBalance, pillarFromIndex } from './pillars.js';
-import { judgeStrength, yearFit } from './strength.js';
+import { judgeBoth, yearFit } from './strength.js';
 import { luckPeriods, cycleAtAge, ageNow } from './luck.js';
 import { ELEMENT_PLAIN, VERDICT_PLAIN, STEM_PLAIN } from './plainwords.js';
 import { governingRisshun } from './terms.js';
@@ -66,11 +66,17 @@ function verdictPassage(chart, strength) {
       + `\n\nどちらにも大きく振れていないぶん、環境に引っ張られやすいタイプです。自分で選んだ場所が、そのまま強みにも弱みにもなります。`,
   }[strength.verdict];
 
+  const split = strength.agrees ? '' :
+    `\n\n※ この命式は**流派によって判定が割れます**。地支の「隠れた干」まで数えると`
+    + `${VERDICT_PLAIN[strength.verdict].headline}、数えないと`
+    + `${VERDICT_PLAIN[strength.alternative.verdict].headline}。ここでは数えたほうを採っています。`
+    + `境目に近いということなので、どちらの読みも半分ずつ当たると思ってください。`;
+
   return {
     title: plain.headline,
     term: plain.term,
     lead: plain.oneLine,
-    text: body,
+    text: body + split,
     source: [`day_stem:${day.stemChar}`, `month_branch:${chart.pillars.month.branchChar}`,
       `judgement:${plain.term}`],
     key: `verdict:${strength.verdict}`,
@@ -243,7 +249,7 @@ function advicePassages(strength, year) {
 /* --- assembly ------------------------------------------------------------- */
 
 export function speak(chart, nowJdUt, input = {}) {
-  const strength = judgeStrength(chart.pillars);
+  const strength = judgeBoth(chart.pillars);
   const year = yearAhead(chart, strength, nowJdUt);
   const luck = luckPeriods(chart, strength, input.sex);
   return {
