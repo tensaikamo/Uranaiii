@@ -13,7 +13,8 @@
 import { initEphemeris, withinEphemeris, EPHEMERIS_YEARS, julianDay } from './engine/swe.js';
 import { buildChart, DEFAULT_AXES } from './engine/chart.js';
 import { speak } from './engine/voice.js';
-import { peopleIn } from './engine/plainwords.js';
+import { peopleIn, ELEMENT_PLAIN } from './engine/plainwords.js';
+import { readName } from './engine/name.js';
 import { frequencyOf, RARITY_SAMPLES } from './engine/rarity.js';
 import { el } from './ui/render.js';
 import { startSky } from './ui/sky.js';
@@ -56,6 +57,8 @@ form.addEventListener('submit', (event) => {
 
   try {
     render({
+      surname: document.getElementById('surname').value,
+      given: document.getElementById('given').value,
       year, month, day, hour, minute,
       precision: time ? 'pm5' : 'unknown',
       longitude: Number(document.getElementById('longitude').value),
@@ -176,9 +179,46 @@ function render(input) {
   output.append(verdictSection);
 
   /* --- the rest --- */
-  for (const entry of [v.need, v.portrait, v.absence, v.year, ...v.advice]) {
+  for (const entry of [v.need, v.portrait, v.absence, v.year]) {
     if (entry) output.append(passage(entry));
   }
+
+  /* --- 姓名判断, when a name was given ---------------------------------- */
+  // Two different systems, joined only where they legitimately meet: both
+  // speak 五行, and the chart has already said which one is needed.
+  const named = readName(input.surname || '', input.given || '', s);
+  if (named) {
+    const section = el('section', 'section');
+    section.append(el('h2', 'plain-h2', '名前から'));
+
+    const table = el('table');
+    const tbody = el('tbody');
+    for (const g of named.five.grids) {
+      const tr = el('tr', named.supplies.includes(g) ? 'dominant' : null);
+      tr.append(el('th', null, g.name));
+      tr.append(el('td', 'num', `${g.count}画`));
+      tr.append(el('td', null,
+        `${ELEMENT_PLAIN[g.element].name}${named.supplies.includes(g) ? '　← 効く' : ''}`));
+      tbody.append(tr);
+    }
+    table.append(tbody);
+    section.append(table);
+    section.append(prose(named.text));
+
+    if (named.five.unknown.length > 0) {
+      section.append(el('p', 'hint',
+        `画数が分からない文字がありました: ${named.five.unknown.join('、')}。`
+        + 'その字を抜いて数えているので、結果はずれています。'));
+    }
+    section.append(el('p', 'hint',
+      '画数は漢字辞典の数え方（新字体）です。旧字体で数える流派では、'
+      + '邊や齋のような字で結果が変わります。'
+      + 'また「総格◯画は吉」という81画の吉凶表は、流派差が大きいので入れていません。'));
+    section.append(citations(named));
+    output.append(section);
+  }
+
+  for (const entry of v.advice) output.append(passage(entry));
 
   /* --- honesty, also in plain words --- */
   const close = el('section', 'section');

@@ -138,6 +138,31 @@ node tools/reading-metrics.mjs 1000
 
 年運は立春で切り替える。1月1日ではない。
 
+## 名前も見る（姓名判断）
+
+四柱推命と姓名判断は別の体系なので、混ぜて一つの結論にはしない。
+ただし**両方とも五行を語る**——ここが唯一、正当につながる場所である。
+
+命式はすでに「その人に効く五行（用神）」を出している。だから名前に聞ける問いは
+一つに絞れる: **あなたの名前は、命式が足りないものを補っているか？**
+
+### 画数の出典
+
+**KANJIDIC2**（EDRDG, CC BY-SA 4.0）の `<stroke_count>`。日本の漢字辞典の数え方。
+
+Unihan の `kTotalStrokes` は使わなかった。中国字形に従うため、辶 と 阝 を含む字で
+日本の慣行とずれる。**郎 を8画とする**（辞典は9画）——日本人の名前で最頻の字の一つで、
+ここを外すのは致命的だった。既知19字で照合して Unihan 19/21、KANJIDIC2 21/21。
+
+濁点・半濁点は NFD 分解して +2 / +1。画数が引けない文字は0扱いにせず、
+「読めなかった字」として画面に出す。
+
+### 入れなかったもの
+
+**81画の吉凶表**。市販の姓名判断の中心だが、流派差が大きく、黙って載せると
+流派を一つ選んで隠すことになる。実測できる根拠も無い。入れるなら、天体暦や
+万年暦と同じように出典を名指しして入れる。
+
 ## 仕様からの逸脱（作者承認済み）
 
 v2仕様 §5 は「参照するのは占いアプリではなく紙の万年暦」「動きは27分トグルに
@@ -185,7 +210,7 @@ python3 -m http.server 8000
 ## 検算
 
 ```
-node tools/verify.mjs              # 40項目。VERIFY.md を生成する
+node tools/verify.mjs              # 45項目。VERIFY.md を生成する
 node tools/reading-metrics.mjs     # 被覆率 × 弁別率
 node tools/build-rarity.mjs        # 各文の出現頻度を測り rarity.js を生成
 ```
@@ -219,6 +244,9 @@ app/
     reading.js      読み。全文が出典を持ち、無い文は生成段階で捨てる
     voice.js        語り（別ページ）。人物評・助言・年運
     rarity.js       各文の出現頻度（生成物）
+    name.js         姓名判断。五格と、命式の用神との接続
+    strokes.js      画数表（生成物・KANJIDIC2 由来）
+    plainwords.js   表示テキストの語彙。専門語を今の日本語に開く
   voice-main.js
   ui/
     dial.js         天盤（SVG）
@@ -228,9 +256,10 @@ app/
   style.css
 vendor/swisseph-wasm/   同梱の天体暦（GPL）
 tools/
-  verify.mjs           検算（40項目）
+  verify.mjs           検算（45項目）
   reading-metrics.mjs  被覆率 × 弁別率
   build-rarity.mjs     出現頻度の実測
+  build-strokes.mjs    KANJIDIC2 から画数表を生成
 VERIFY.md
 ```
 
@@ -242,3 +271,6 @@ Swiss Ephemeris（Astrodienst AG）を含む。Swiss Ephemeris は GPL と商用
 デュアルライセンスであり、本リポジトリは GPL 側で使っている。商用利用には
 Astrodienst からの別途ライセンスが要る場合がある。
 WebAssembly ビルドは [prolaxu/swisseph-wasm](https://github.com/prolaxu/swisseph-wasm)。
+
+画数は [KANJIDIC2](https://www.edrdg.org/wiki/index.php/KANJIDIC_Project)
+（Electronic Dictionary Research and Development Group）を CC BY-SA 4.0 で使用。

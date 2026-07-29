@@ -16,6 +16,8 @@ import { buildChart, buildChartAtOffset, DEFAULT_AXES } from '../app/engine/char
 import { resolveUncertainty } from '../app/engine/uncertainty.js';
 import { readChart, readingSignature } from '../app/engine/reading.js';
 import { voiceStatements } from '../app/engine/voice.js';
+import { strokesOf } from '../app/engine/strokes.js';
+import { fiveGrids, elementOfCount } from '../app/engine/name.js';
 import { frequencyOf } from '../app/engine/rarity.js';
 import { trueTermPeriod, meanTermPeriod, degreesSinceRisshun, termPeriod, termIngresses, SETSU } from '../app/engine/terms.js';
 import { computePillars, TIGER_MONTH_STEM, RAT_HOUR_STEM, DAY_PILLAR_OFFSET, pillarFromIndex, STEMS, BRANCHES } from '../app/engine/pillars.js';
@@ -576,6 +578,51 @@ const DAY_PILLARS = [
   record('語り (別ページ)', 'passages discriminate between charts',
     signatures.size / samples > 0.3,
     `${signatures.size}/${samples} distinct passage sets = ${((signatures.size / samples) * 100).toFixed(1)}%`);
+}
+
+// --- 姓名判断 ---------------------------------------------------------------
+// Stroke counts come from KANJIDIC2 rather than Unihan because Unihan follows
+// the Chinese form and disagrees with Japanese dictionaries on 辶 and 阝 — it
+// gives 郎 as 8 where Japanese practice gives 9, and 郎 is everywhere in
+// Japanese given names. Checked here against dictionary values.
+{
+  const known = [['山', 3], ['田', 5], ['中', 4], ['沢', 7], ['藤', 18], ['佐', 7],
+    ['鈴', 13], ['高', 10], ['橋', 16], ['渡', 12], ['辺', 5], ['邊', 19],
+    ['斎', 11], ['齋', 17], ['郎', 9], ['子', 3], ['村', 7], ['井', 4], ['響', 20]];
+  const wrong = known.filter(([c, n]) => strokesOf(c) !== n);
+  record('姓名判断', 'kanji stroke counts match Japanese dictionary values',
+    wrong.length === 0,
+    wrong.length === 0 ? `${known.length}/${known.length} characters agree (KANJIDIC2)`
+      : wrong.map(([c, n]) => `${c}: got ${strokesOf(c)}, expected ${n}`).join('; '));
+
+  // 濁点 and 半濁点 decompose rather than falling through as unknown.
+  record('姓名判断', 'kana with 濁点/半濁点 are counted, not dropped',
+    strokesOf('が') === 5 && strokesOf('ぱ') === 7 && strokesOf('さ') === 3,
+    `が=${strokesOf('が')}, ぱ=${strokesOf('ぱ')}, さ=${strokesOf('さ')}`);
+
+  // 五格 arithmetic, including the 霊数 asymmetry: it applies to 天格/地格/外格
+  // but never to 人格 or 総格.
+  const f = fiveGrids('村井', '響');
+  const by = Object.fromEntries(f.grids.map((g) => [g.name, g.count]));
+  const expected = { 人格: 24, 総格: 31, 天格: 11, 地格: 21, 外格: 8 };
+  const bad = Object.entries(expected).filter(([k, v]) => by[k] !== v);
+  record('姓名判断', '五格 arithmetic with 霊数 (村井/響: 7+4 / 20)',
+    bad.length === 0,
+    bad.length === 0 ? '人格24 総格31 天格11 地格21 外格8 — all as computed by hand'
+      : bad.map(([k, v]) => `${k}: got ${by[k]}, expected ${v}`).join('; '));
+
+  // A two-character given name must not pick up the 霊数.
+  const g2 = fiveGrids('村井', '太郎');
+  const by2 = Object.fromEntries(g2.grids.map((g) => [g.name, g.count]));
+  record('姓名判断', '霊数 is not added when neither part is a single character',
+    g2.reiSuu === false && by2['地格'] === 13 && by2['総格'] === 24 && by2['人格'] === 8,
+    `太郎: 地格${by2['地格']}(4+9) 人格${by2['人格']}(井4+太4) 総格${by2['総格']}`);
+
+  // 画数 -> 五行 by last digit.
+  const elements = [10, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(elementOfCount).join(',');
+  record('姓名判断', '画数 maps to 五行 by its last digit',
+    elements === 'water,wood,wood,fire,fire,earth,earth,metal,metal,water',
+    '10水 1,2木 3,4火 5,6土 7,8金 9水');
 }
 
 // --- report -----------------------------------------------------------------
