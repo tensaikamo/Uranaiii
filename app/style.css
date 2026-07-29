@@ -347,6 +347,38 @@ button.primary:active { background: rgba(201, 169, 97, 0.2); }
 .dial-readout .ro-value.dim { color: var(--ink-dim); }
 .dial-readout .ro-delta { color: var(--brass); }
 
+/* The inspect line the dial writes into on touch or keyboard focus. */
+.dial-inspect {
+  margin: 10px 0 0;
+  min-height: 1.9em;
+  font-size: 12px;
+  color: var(--ink-faint);
+  text-align: center;
+  transition: color 200ms ease;
+}
+.dial-inspect.is-live { color: var(--ink-dim); }
+.dial-inspect .ins-value {
+  font-family: var(--mono);
+  color: var(--ink);
+  margin-right: 9px;
+}
+.dial-inspect .ins-title { font-family: var(--mincho); font-size: 14px; color: var(--ink); }
+.dial-inspect .ins-note { margin-left: 9px; font-family: var(--mono); font-size: 11px; }
+
+/* Marks respond to being touched or focused. */
+.sector, .hour-sector { transition: fill 160ms ease, stroke 160ms ease; }
+.sector.is-hot { fill: rgba(201, 169, 97, 0.26); stroke: var(--brass); }
+.hour-sector.is-hot { fill: rgba(201, 169, 97, 0.22); stroke: var(--brass); }
+.sector:focus-visible, .hour-sector:focus-visible { outline: none; stroke: var(--brass); stroke-width: 2; }
+.sector, .hour-sector { cursor: pointer; }
+
+/* Only the sectors are hit targets. Everything drawn over them — the branch
+   characters, the hands, the Sun — must let the pointer through, or the mark
+   stops responding exactly where the reader aims: at the character. */
+.sector-label, .hour-label, .tick, .origin-mark, .sun, .sun-ray,
+.hand, .clock-gap, .error-arc, .core-stem, .core-caption, .core-halo,
+.dial-note, .dial-rim, .dial-rule { pointer-events: none; }
+
 /* --- the four pillars ---------------------------------------------------- */
 
 /* In vertical-rl the inline axis runs top-to-bottom and the block axis runs

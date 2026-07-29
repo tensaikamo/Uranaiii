@@ -124,6 +124,31 @@ export function termPeriod(jdUt, method) {
 }
 
 /**
+ * All twelve 節 of the solar year containing jdUt, with their ingress instants.
+ *
+ * Presentation only — the pillars never consult this. Each ingress is found by
+ * searching forward from the previous one, which keeps every search anchored
+ * to a point at most ~31 days away and so cannot return the wrong year's
+ * crossing.
+ */
+export function termIngresses(jdUt, method = 'teiki') {
+  const risshun = governingRisshun(jdUt, method);
+
+  if (method === 'kouki') {
+    const { previous, step } = solsticeCycle(risshun + 1);
+    return SETSU.map((term, k) => ({ term, start: previous + (3 + 2 * k) * step }));
+  }
+
+  const out = [{ term: SETSU[0], start: risshun }];
+  let cursor = risshun;
+  for (let k = 1; k < 12; k += 1) {
+    cursor = sunCrossing(SETSU[k].longitude, cursor + 1);
+    out.push({ term: SETSU[k], start: cursor });
+  }
+  return out;
+}
+
+/**
  * The 立春 governing jdUt, i.e. the most recent one at or before it.
  *
  * The sexagenary year turns at 立春, never on 1 January, and 立春 itself drifts

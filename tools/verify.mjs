@@ -14,7 +14,7 @@ import SwissEph from '../vendor/swisseph-wasm/src/swisseph.js';
 import { initEphemeris, ephemerisVersion, sunLongitude, equationOfTime, sunCrossing, julianDay, calendarDate, deltaTSeconds, withinEphemeris, EPHEMERIS_YEARS } from '../app/engine/swe.js';
 import { buildChart, buildChartAtOffset, DEFAULT_AXES } from '../app/engine/chart.js';
 import { resolveUncertainty } from '../app/engine/uncertainty.js';
-import { trueTermPeriod, meanTermPeriod, degreesSinceRisshun, SETSU } from '../app/engine/terms.js';
+import { trueTermPeriod, meanTermPeriod, degreesSinceRisshun, termPeriod, termIngresses, SETSU } from '../app/engine/terms.js';
 import { computePillars, TIGER_MONTH_STEM, RAT_HOUR_STEM, DAY_PILLAR_OFFSET, pillarFromIndex, STEMS, BRANCHES } from '../app/engine/pillars.js';
 import { japanOffsetHours } from '../app/engine/time.js';
 
@@ -440,6 +440,27 @@ const DAY_PILLARS = [
   }
   record('invariants', 'day pillar advances by exactly one per civil day',
     dayBreaks === 0, `${200 - dayBreaks}/200 consecutive pairs step by one`);
+}
+
+// --- the dial's ingress list must agree with the engine ---------------------
+// termIngresses() feeds the dial only, but a presentation layer that drifts
+// from the pillars would label the chart with times the chart does not use.
+{
+  let mismatched = 0;
+  let checked = 0;
+  for (const method of ['teiki', 'kouki']) {
+    for (const [y, m, d] of [[1990, 6, 15], [2024, 2, 4], [2024, 8, 20], [1955, 11, 2], [2026, 1, 9]]) {
+      const ut = julianDay(y, m, d, 12) - 9 / 24;
+      const period = termPeriod(ut, method);
+      const list = termIngresses(ut, method);
+      const entry = list.find((e) => e.term.name === period.term.name);
+      checked += 1;
+      // The listed ingress for the birth's own 節 must be the period it opened.
+      if (!entry || Math.abs(entry.start - period.start) > 1 / 1440) mismatched += 1;
+    }
+  }
+  record('invariants', "the dial's 節入り list matches the pillars' own term period",
+    mismatched === 0, `${checked - mismatched}/${checked} agree to within a minute`);
 }
 
 // --- report -----------------------------------------------------------------

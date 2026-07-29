@@ -186,6 +186,33 @@ export function buildDialReadout(view) {
   return box;
 }
 
+/**
+ * The line the dial writes into when a sector is touched or focused.
+ *
+ * It starts with an instruction rather than blank, so the dial advertises that
+ * it can be interrogated at all.
+ */
+export function buildInspectLine() {
+  const line = el('p', 'dial-inspect');
+  line.dataset.idle = '環に触れると、その節入りと時辰が出る';
+  line.textContent = line.dataset.idle;
+  return line;
+}
+
+export function writeInspect(line, detail) {
+  line.textContent = '';
+  if (!detail) {
+    line.classList.remove('is-live');
+    line.textContent = line.dataset.idle;
+    return;
+  }
+  line.classList.add('is-live');
+  // Value leads, label follows.
+  line.append(el('span', 'ins-value', detail.value));
+  line.append(el('span', 'ins-title', detail.title));
+  if (detail.note) line.append(el('span', 'ins-note', detail.note));
+}
+
 /* --- certainty (§2.5) ---------------------------------------------------- */
 
 const PILLAR_NAME = { year: '年柱', month: '月柱', day: '日柱', hour: '時柱' };

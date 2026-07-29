@@ -18,7 +18,7 @@
  * decorated into looking more certain than it is.
  */
 
-import { SETSU, degreesSinceRisshun } from '../engine/terms.js';
+import { SETSU, degreesSinceRisshun, termIngresses } from '../engine/terms.js';
 import { BRANCHES } from '../engine/pillars.js';
 
 const NS = 'http://www.w3.org/2000/svg';
@@ -99,6 +99,28 @@ function defs() {
 }
 
 /**
+ * Wire one mark to the inspect readout.
+ *
+ * Pointer and keyboard get the same detail, per the interaction rules: a value
+ * that only appears on hover is unreachable on a phone and by a keyboard.
+ */
+function bindInspect(mark, detail, view) {
+  const show = () => {
+    mark.classList.add('is-hot');
+    if (view.onInspect) view.onInspect(detail);
+  };
+  const hide = () => {
+    mark.classList.remove('is-hot');
+    if (view.onInspect) view.onInspect(null);
+  };
+  mark.addEventListener('pointerenter', show);
+  mark.addEventListener('pointerleave', hide);
+  mark.addEventListener('focus', show);
+  mark.addEventListener('blur', hide);
+  mark.addEventListener('click', show);
+}
+
+/**
  * Build the dial.
  *
  * `view` carries the two clocks separately so the gap between them can be
@@ -123,13 +145,28 @@ export function buildDial(view) {
   /* --- outer ring: the twelve 節, unwrapped from 立春 at the top --------- */
   const current = chart.pillars.period.branch;
   const yearGroup = node('g', { class: 'dial-year' });
+  const ingresses = termIngresses(chart.time.ut, chart.axes.termMethod);
   SETSU.forEach((term, i) => {
     const from = i * 30;
     const live = term.branch === current;
-    yearGroup.append(node('path', {
+    // The sector is the hit target, and it is far larger than the 24px floor.
+    // Everything it reports is also in the register below, so the inspect
+    // layer only ever enhances — it never gates a value.
+    const sector = node('path', {
       d: ring(from + 0.6, from + 29.4, R_YEAR_OUT, R_YEAR_IN),
       class: `sector${live ? ' is-live' : ''}`,
-    }));
+      tabindex: '0',
+      role: 'button',
+    });
+    const at = ingresses[i];
+    const detail = {
+      title: `${term.name}　${BRANCHES[term.branch]}月`,
+      value: at ? view.formatTime(at.start) : '',
+      note: `黄経 ${term.longitude}°`,
+    };
+    sector.setAttribute('aria-label', `${detail.title} ${detail.note} ${detail.value}`);
+    bindInspect(sector, detail, view);
+    yearGroup.append(sector);
     const [tx, ty] = px(from + 15, R_BRANCH_TEXT);
     const label = node('text', {
       x: tx, y: ty, class: `sector-label${live ? ' is-live' : ''}`,
@@ -174,11 +211,25 @@ export function buildDial(view) {
   for (let j = 0; j < 12; j += 1) {
     const centre = j * 30;
     const live = view.hourKnown && chart.pillars.hour && chart.pillars.hour.branch === j;
-    hourGroup.append(node('path', {
+    // A 時辰 spans two clock hours: 子 is 23:00-00:59, 丑 is 01:00-02:59, ...
+    const from = (j * 2 + 23) % 24;
+    const to = (from + 1) % 24;
+    const hourSector = node('path', {
       d: ring(centre - 14.4, centre + 14.4, R_HOUR_OUT, R_HOUR_IN),
       class: `hour-sector${live ? ' is-live' : ''}`,
       'data-branch': j,
-    }));
+      tabindex: '0',
+      role: 'button',
+    });
+    const pad = (n) => String(n).padStart(2, '0');
+    const detail = {
+      title: `${BRANCHES[j]}時`,
+      value: `${pad(from)}:00 – ${pad(to)}:59`,
+      note: '地方時',
+    };
+    hourSector.setAttribute('aria-label', `${detail.title} ${detail.value} ${detail.note}`);
+    bindInspect(hourSector, detail, view);
+    hourGroup.append(hourSector);
     const [hx, hy] = px(centre, R_HOUR_TEXT);
     const t = node('text', {
       x: hx, y: hy, class: `hour-label${live ? ' is-live' : ''}`,
@@ -227,7 +278,15 @@ export function buildDial(view) {
   caption.textContent = '日主';
   svg.append(caption);
 
-  updateDial(svg, view);
+  const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (view.animateIn && view.hourKnown && !still) {
+    // Both hands start at the top of the dial and sweep round to the hour —
+    // the one moment the chart is being *cast* rather than read.
+    for (const g of svg.querySelectorAll('.hand')) g.style.transform = 'rotate(0deg)';
+    requestAnimationFrame(() => requestAnimationFrame(() => updateDial(svg, view)));
+  } else {
+    updateDial(svg, view);
+  }
   return svg;
 }
 

@@ -11,7 +11,8 @@ import { buildChart, computeAllVariants, analyseAxes, DEFAULT_AXES } from './eng
 import { resolveUncertainty, PRECISIONS, precisionMinutes } from './engine/uncertainty.js';
 import {
   el, buildChartElement, updateChartElement, buildStateElement, buildTermElement,
-  buildAxesElement, buildBudgetElement, buildBalanceElement, buildDialReadout, signedMinutes,
+  buildAxesElement, buildBudgetElement, buildBalanceElement, buildDialReadout, buildInspectLine, writeInspect,
+  formatJst, signedMinutes,
 } from './ui/render.js';
 import { buildDial, updateDial } from './ui/dial.js';
 import { startSky } from './ui/sky.js';
@@ -27,6 +28,7 @@ const state = {
   precision: 'pm5',
   dial: null,
   readout: null,
+  inspect: null,
   correction: true, // 真太陽時補正 on
   input: null,
   chartRoot: null,
@@ -136,6 +138,8 @@ function dialView(input) {
     apparentHour: hourKnown ? clockHour(buildChart(input, { ...axes, solarTime: 'apparent' }).time.local) : 0,
     standardHour: hourKnown ? clockHour(buildChart(input, { ...axes, solarTime: 'standard' }).time.local) : 0,
     uncertaintyMinutes: precisionMinutes(input.precision),
+    formatTime: (jd) => formatJst(jd),
+    onInspect: (detail) => { if (state.inspect) writeInspect(state.inspect, detail); },
   };
 }
 
@@ -151,11 +155,13 @@ function render() {
   const dialSection = el('section', 'section');
   const dialWrap = el('div', 'dial-wrap');
   const view = dialView(input);
-  state.dial = buildDial(view);
+  state.inspect = buildInspectLine();
+  state.dial = buildDial({ ...view, animateIn: true });
   dialWrap.append(state.dial);
   dialSection.append(dialWrap);
   state.readout = buildDialReadout(view);
   dialSection.append(state.readout);
+  dialSection.append(state.inspect);
   output.append(dialSection);
 
   /* --- the toggle and the chart (§5.4) --- */
