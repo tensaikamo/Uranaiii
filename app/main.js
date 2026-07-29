@@ -11,15 +11,22 @@ import { buildChart, computeAllVariants, analyseAxes, DEFAULT_AXES } from './eng
 import { resolveUncertainty, PRECISIONS, precisionMinutes } from './engine/uncertainty.js';
 import {
   el, buildChartElement, updateChartElement, buildStateElement, buildTermElement,
-  buildAxesElement, buildBudgetElement, signedMinutes,
+  buildAxesElement, buildBudgetElement, buildBalanceElement, buildDialReadout, signedMinutes,
 } from './ui/render.js';
+import { buildDial, updateDial } from './ui/dial.js';
+import { startSky } from './ui/sky.js';
+import { clockHour } from './engine/pillars.js';
 
 const boot = document.getElementById('boot');
 const form = document.getElementById('form');
 const output = document.getElementById('output');
 
+startSky(document.getElementById('sky'));
+
 const state = {
   precision: 'pm5',
+  dial: null,
+  readout: null,
   correction: true, // 真太陽時補正 on
   input: null,
   chartRoot: null,
@@ -113,6 +120,25 @@ function currentAxes() {
   return { ...DEFAULT_AXES, solarTime: state.correction ? 'apparent' : 'standard' };
 }
 
+/**
+ * What the dial needs: both clocks at once. The gap between them is the whole
+ * point of the correction, so neither can be dropped just because one of them
+ * is the active chart.
+ */
+function dialView(input) {
+  const axes = currentAxes();
+  const chart = buildChart(input, axes);
+  const hourKnown = input.precision !== 'unknown';
+  return {
+    chart,
+    hourKnown,
+    activeClock: state.correction ? 'apparent' : 'standard',
+    apparentHour: hourKnown ? clockHour(buildChart(input, { ...axes, solarTime: 'apparent' }).time.local) : 0,
+    standardHour: hourKnown ? clockHour(buildChart(input, { ...axes, solarTime: 'standard' }).time.local) : 0,
+    uncertaintyMinutes: precisionMinutes(input.precision),
+  };
+}
+
 function render() {
   const { input } = state;
   const axes = currentAxes();
@@ -120,6 +146,17 @@ function render() {
 
   output.hidden = false;
   output.textContent = '';
+
+  /* --- 天盤 --- */
+  const dialSection = el('section', 'section');
+  const dialWrap = el('div', 'dial-wrap');
+  const view = dialView(input);
+  state.dial = buildDial(view);
+  dialWrap.append(state.dial);
+  dialSection.append(dialWrap);
+  state.readout = buildDialReadout(view);
+  dialSection.append(state.readout);
+  output.append(dialSection);
 
   /* --- the toggle and the chart (§5.4) --- */
   const toggleSection = el('section', 'section');
@@ -172,6 +209,14 @@ function render() {
       verdict.append(document.createTextNode(' が入れ替わる。'));
     }
 
+    if (state.dial) {
+      const nextView = dialView(input);
+      updateDial(state.dial, nextView);
+      const readout = buildDialReadout(nextView);
+      state.readout.replaceWith(readout);
+      state.readout = readout;
+    }
+
     // Everything downstream depends on the axis too, so rebuild it.
     try {
       refreshDownstream(input, currentAxes());
@@ -197,6 +242,7 @@ function refreshDownstream(input, axes) {
   const nodes = [
     buildStateElement(resolution),
     buildTermElement(chart),
+    buildBalanceElement(chart),
     buildAxesElement(analysis),
     buildBudgetElement(chart, precisionMinutes(input.precision), deltaTSeconds(chart.time.ut)),
     buildTimeNotes(chart),

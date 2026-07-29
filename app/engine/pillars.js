@@ -128,6 +128,33 @@ export function computePillars({ ut, local, termMethod = 'teiki', ziShi = 'late'
   };
 }
 
+export const ELEMENTS = ['wood', 'fire', 'earth', 'metal', 'water'];
+export const ELEMENT_NAMES = { wood: '木', fire: '火', earth: '土', metal: '金', water: '水' };
+
+/**
+ * The 五行 tally of a chart.
+ *
+ * Every count carries the characters it came from. That is the §8.2 rule
+ * applied to a number rather than a sentence: a bare "water is strong" would
+ * be unsourced, and this cannot be rendered without its sources.
+ */
+export function elementBalance(pillars) {
+  const counts = Object.fromEntries(ELEMENTS.map((e) => [e, 0]));
+  const sources = Object.fromEntries(ELEMENTS.map((e) => [e, []]));
+
+  for (const [key, label] of [['year', '年'], ['month', '月'], ['day', '日'], ['hour', '時']]) {
+    const p = pillars[key];
+    if (!p) continue;
+    counts[p.stemElement] += 1;
+    sources[p.stemElement].push(`${label}干:${p.stemChar}`);
+    counts[p.branchElement] += 1;
+    sources[p.branchElement].push(`${label}支:${p.branchChar}`);
+  }
+
+  const total = ELEMENTS.reduce((sum, e) => sum + counts[e], 0);
+  return { counts, sources, total };
+}
+
 /** Stable identity of a chart, for the axis-difference logic of spec §4.2. */
 export function pillarSignature(pillars) {
   return [pillars.year, pillars.month, pillars.day, pillars.hour]

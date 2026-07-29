@@ -8,6 +8,7 @@
  */
 
 import { calendarDate } from '../engine/swe.js';
+import { elementBalance, ELEMENTS, ELEMENT_NAMES } from '../engine/pillars.js';
 import { naturalFrequency } from '../engine/uncertainty.js';
 
 const PILLAR_LABELS = [['year', '年'], ['month', '月'], ['day', '日'], ['hour', '時']];
@@ -142,6 +143,47 @@ export function updateChartElement(root, chart) {
     if (columnChanged) changed.push(key);
   }
   return changed;
+}
+
+/**
+ * The dial's key, doubling as the exact readout of both clocks.
+ *
+ * The wedge on the dial is only about 7° wide for a 27-minute correction, which
+ * is the truth and is too small to read. Rather than exaggerate the geometry,
+ * the numbers are printed here beside the same colours used on the dial.
+ */
+export function buildDialReadout(view) {
+  const box = el('div', 'dial-readout');
+  if (!view.hourKnown) {
+    box.append(el('span'));
+    box.append(el('span', 'ro-name', '出生時刻が不明のため、針は引いていない'));
+    box.append(el('span'));
+    return box;
+  }
+
+  const hm = (hours) => {
+    const total = Math.round(hours * 60);
+    const hh = Math.floor(((total / 60) % 24 + 24) % 24);
+    const mm = ((total % 60) + 60) % 60;
+    return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+  };
+
+  const rows = [
+    ['k-std', '標準時', hm(view.standardHour), true],
+    ['k-app', '真太陽時', hm(view.apparentHour), false],
+  ];
+  for (const [cls, name, value, dim] of rows) {
+    box.append(el('i', cls));
+    box.append(el('span', 'ro-name', name));
+    box.append(el('span', `ro-value${dim ? ' dim' : ''}`, value));
+  }
+
+  const delta = (view.apparentHour - view.standardHour) * 60;
+  box.append(el('i', 'k-err'));
+  box.append(el('span', 'ro-name',
+    view.uncertaintyMinutes === null ? '誤差棒' : `誤差棒 ±${view.uncertaintyMinutes}分`));
+  box.append(el('span', 'ro-value ro-delta', `差 ${signedMinutes(delta, 0)}`));
+  return box;
 }
 
 /* --- certainty (§2.5) ---------------------------------------------------- */
@@ -312,6 +354,52 @@ export function buildAxesElement(analysis) {
     details.append(detail);
     section.append(details);
   }
+  return section;
+}
+
+/* --- 五行 balance -------------------------------------------------------- */
+
+/**
+ * The tally of the five elements across the chart's characters.
+ *
+ * Each row shows the characters it was counted from. That is spec §8.2 applied
+ * to a number: "water is strong" on its own would be unsourced, so the sources
+ * are rendered with the count, not hidden behind it. No claim is made about
+ * what a tally *means* — that belongs to the interpretation layer, which is
+ * not built.
+ */
+export function buildBalanceElement(chart) {
+  const section = el('section', 'section');
+  section.append(el('h2', null, '五行の数'));
+
+  const balance = elementBalance(chart.pillars);
+  const peak = Math.max(1, ...ELEMENTS.map((e) => balance.counts[e]));
+  const grid = el('div', 'balance');
+
+  for (const key of ELEMENTS) {
+    const count = balance.counts[key];
+    const row = el('div', `balance-row${count === 0 ? ' is-empty' : ''}`);
+    row.append(el('div', `balance-name el-${key}`, ELEMENT_NAMES[key]));
+    const track = el('div', 'balance-track');
+    const fill = el('div', `balance-fill bg-${key}`);
+    fill.style.width = `${(count / peak) * 100}%`;
+    track.append(fill);
+    row.append(track);
+    row.append(el('div', 'balance-count', String(count)));
+    grid.append(row);
+  }
+  section.append(grid);
+
+  const sources = el('p', 'balance-sources');
+  sources.textContent = ELEMENTS
+    .filter((e) => balance.counts[e] > 0)
+    .map((e) => `${ELEMENT_NAMES[e]} ${balance.sources[e].join('・')}`)
+    .join('\n');
+  sources.style.whiteSpace = 'pre-line';
+  section.append(sources);
+
+  section.append(el('p', 'hint',
+    `${balance.total}文字を数えたもの。多い少ないが何を意味するかは、盤が確定するまで書かない。`));
   return section;
 }
 

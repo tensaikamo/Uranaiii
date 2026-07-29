@@ -1,36 +1,53 @@
 /*
- * Visual design (spec §5).
+ * Visual design.
  *
- * The reference is a paper 万年暦, not a fortune-telling app: dense tables,
- * vertical setting, and 朱 reserved for the term ingress times alone.
+ * The reference is a 羅盤 — the lacquered, brass-ruled diviner's compass — laid
+ * on a night sky: concentric rings, dense registers, gold rules, and 朱 spent
+ * on one thing only. The form is borrowed; none of its claims are.
  *
- * The five element colours are a system of five equal terms, so none of them is
- * promoted to "the accent colour". They appear only as thin marks beside each
- * character — never as fills, never as the ground.
+ * The five element colours are a system of five equal terms, so none is
+ * promoted to "the accent". They appear as marks and glows beside characters
+ * that already name themselves — colour is never the only encoding.
  */
 
 :root {
-  /* 五行五色 */
-  --wood:  #2E5E4E;  /* 青 — old wood, not a sapling */
-  --fire:  #A8322D;  /* 赤 — vermilion, held back */
-  --earth: #A88B3F;  /* 黄 — loess, not gold */
-  --metal: #D8D5CC;  /* 白 — unbleached, the dull sheen of metal */
-  --water: #1C2430;  /* 玄 — not black; dark with blue in it */
+  /*
+   * 五行五色, re-stepped for a dark ground.
+   *
+   * The original spec palette (木 #2E5E4E, 火 #A8322D, 土 #A88B3F, 金 #D8D5CC,
+   * 水 #1C2430) fails as a categorical set here, measured rather than judged:
+   * 木↔火 separate by only ΔE 5.6 under protanopia, and 水 *is* the background
+   * (contrast 1.12 — invisible). These keep the same five hues and readings but
+   * pass CVD separation (worst pair ΔE 8.6), the normal-vision floor (16.0) and
+   * 3:1 contrast on every slot. 金 stays near-achromatic because that is what
+   * 金 means; the 干支 character beside it always carries the identity.
+   */
+  --el-wood:  #3FA98A;
+  --el-fire:  #E2574B;
+  --el-earth: #D9A441;
+  --el-metal: #DED8CA;
+  --el-water: #5A8FD8;
 
-  --ground: #1C2430;
-  --ink: #D8D5CC;
-  --ink-dim: #8D9098;
-  --ink-faint: #5A6068;
-  --rule: #2C3543;
-  --rule-strong: #3D4857;
-  --cinnabar: #A8322D;
+  /* Ground and rules */
+  --ground: #070C14;
+  --ground-2: #0C1420;
+  --panel: rgba(18, 27, 40, 0.62);
+  --brass: #C9A961;
+  --brass-dim: rgba(201, 169, 97, 0.42);
+  --brass-faint: rgba(201, 169, 97, 0.16);
+  --cinnabar: #D4514A;
 
-  /* No web fonts: downloading one would break "no network after load" (§7).
-     iOS supplies Hiragino Mincho, which sets vertically and is what the chart
-     is designed around. The rest of the stack is a safety net — a font without
-     vertical metrics gives every glyph a zero vertical advance and piles the
-     characters on top of one another, so the fallbacks are all faces that set
-     vertically, and the generic `serif` is deliberately last. */
+  --ink: #E7E1D4;
+  --ink-dim: #98A2B0;
+  --ink-faint: #626C7C;
+  --rule: rgba(201, 169, 97, 0.13);
+  --rule-strong: rgba(201, 169, 97, 0.28);
+
+  /* No web fonts: fetching one would break "no network after load".
+     iOS supplies Hiragino Mincho, which sets vertically — the chart is built
+     around that. Fallbacks are all faces that set vertically, because a font
+     without vertical metrics gives every glyph a zero vertical advance and
+     piles the characters on top of one another. */
   --mincho: "Hiragino Mincho ProN", "HiraMinProN-W3", "Yu Mincho", YuMincho,
             "Noto Serif JP", "Noto Serif CJK JP", "Source Han Serif JP",
             "IPAmjMincho", "IPAMincho", "MS Mincho", "Songti SC", serif;
@@ -40,62 +57,109 @@
 }
 
 *, *::before, *::after { box-sizing: border-box; }
-
 html { -webkit-text-size-adjust: 100%; }
 
 body {
   margin: 0;
-  padding: 0 16px calc(32px + env(safe-area-inset-bottom));
+  padding: 0 16px calc(40px + env(safe-area-inset-bottom));
   background: var(--ground);
   color: var(--ink);
   font-family: var(--gothic);
   font-size: 15px;
-  line-height: 1.7;
-  /* The水 of the palette is the ground itself, so nothing sits on pure black. */
+  line-height: 1.75;
+  overflow-x: hidden;
 }
 
-main { max-width: 480px; margin: 0 auto; }
+/* Two soft aurorae, fixed behind everything. Large, slow, and low-contrast so
+   they read as depth rather than as decoration. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: -20% -30%;
+  z-index: -2;
+  pointer-events: none;
+  background:
+    radial-gradient(48% 34% at 22% 12%, rgba(63, 169, 138, 0.13), transparent 70%),
+    radial-gradient(52% 38% at 82% 30%, rgba(90, 143, 216, 0.14), transparent 72%),
+    radial-gradient(60% 40% at 50% 96%, rgba(201, 169, 97, 0.08), transparent 70%),
+    var(--ground);
+}
+
+#sky {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+main { max-width: 480px; margin: 0 auto; position: relative; }
 
 /* --- masthead ------------------------------------------------------------ */
 
 .masthead {
   max-width: 480px;
   margin: 0 auto;
-  padding: 28px 0 20px;
-  border-bottom: 1px solid var(--rule);
+  padding: 40px 0 22px;
+  text-align: center;
+  position: relative;
 }
 .masthead h1 {
   font-family: var(--mincho);
-  font-size: 30px;
+  font-size: 38px;
   font-weight: 400;
-  letter-spacing: 0.4em;
+  letter-spacing: 0.5em;
   margin: 0;
-  text-indent: 0.4em;
+  text-indent: 0.5em;
+  background: linear-gradient(180deg, #F6EBD2 0%, var(--brass) 62%, #8A6E33 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 .subtitle {
-  margin: 6px 0 0;
-  font-size: 12px;
+  margin: 10px 0 0;
+  font-size: 11px;
   color: var(--ink-dim);
-  letter-spacing: 0.14em;
+  letter-spacing: 0.34em;
+  text-indent: 0.34em;
+}
+/* A brass double-rule, as on the rim of a compass. */
+.masthead::after {
+  content: "";
+  display: block;
+  margin: 20px auto 0;
+  width: 78%;
+  height: 3px;
+  border-top: 1px solid var(--rule-strong);
+  border-bottom: 1px solid var(--rule);
 }
 
 /* --- boot / failure ------------------------------------------------------ */
 
-.boot { padding: 40px 0; color: var(--ink-dim); font-size: 13px; }
-.boot-line { margin: 0; letter-spacing: 0.08em; }
-.boot.failed { color: var(--ink); }
-.boot.failed .boot-line { margin-bottom: 10px; }
+.boot { padding: 46px 0; color: var(--ink-dim); font-size: 13px; text-align: center; }
+.boot-line { margin: 0; letter-spacing: 0.16em; }
+.boot.failed { text-align: left; color: var(--ink); }
+.boot.failed .boot-line { margin-bottom: 12px; }
 .boot .remedy {
   margin: 0;
-  font-size: 13px;
+  font-size: 12.5px;
   color: var(--ink-dim);
   border-left: 2px solid var(--cinnabar);
-  padding-left: 12px;
+  padding-left: 13px;
 }
 
 /* --- form ---------------------------------------------------------------- */
 
-.panel { padding: 22px 0 4px; }
+.panel {
+  padding: 22px 18px 20px;
+  margin-top: 22px;
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  -webkit-backdrop-filter: blur(9px);
+  backdrop-filter: blur(9px);
+}
 
 .field { margin-bottom: 18px; border: 0; padding: 0; min-width: 0; }
 .field-pair { display: flex; gap: 12px; }
@@ -103,17 +167,18 @@ main { max-width: 480px; margin: 0 auto; }
 
 label, legend {
   display: block;
-  font-size: 11px;
-  letter-spacing: 0.18em;
-  color: var(--ink-dim);
-  margin-bottom: 7px;
+  font-size: 10.5px;
+  letter-spacing: 0.22em;
+  color: var(--brass);
+  margin-bottom: 8px;
   padding: 0;
+  opacity: 0.85;
 }
 
 input[type="date"], input[type="time"], input[type="number"] {
   width: 100%;
   padding: 11px 12px;
-  background: #161D27;
+  background: rgba(7, 12, 20, 0.66);
   border: 1px solid var(--rule-strong);
   border-radius: 2px;
   color: var(--ink);
@@ -122,81 +187,173 @@ input[type="date"], input[type="time"], input[type="number"] {
   line-height: 1.3;
   min-height: 44px;
 }
-input:focus-visible {
-  outline: none;
-  border-color: var(--ink-dim);
-}
+input:focus-visible { outline: none; border-color: var(--brass); }
 
 .choices { display: flex; flex-wrap: wrap; gap: 6px; }
 .choice {
   flex: 1 1 auto;
   padding: 9px 4px;
   min-height: 44px;
-  background: #161D27;
-  border: 1px solid var(--rule-strong);
+  background: rgba(7, 12, 20, 0.6);
+  border: 1px solid var(--rule);
   border-radius: 2px;
   color: var(--ink-dim);
   font-family: var(--mono);
   font-size: 13px;
   cursor: pointer;
   white-space: nowrap;
+  transition: border-color 180ms ease, color 180ms ease;
 }
 .choice[aria-pressed="true"] {
   color: var(--ink);
-  border-color: var(--ink-dim);
-  background: #1F2836;
+  border-color: var(--brass-dim);
+  background: rgba(201, 169, 97, 0.09);
 }
 
-.hint {
-  margin: 8px 0 0;
-  font-size: 11.5px;
-  line-height: 1.65;
-  color: var(--ink-faint);
-}
+.hint { margin: 9px 0 0; font-size: 11.5px; line-height: 1.7; color: var(--ink-faint); }
 .hint a { color: var(--ink-dim); }
+.hint strong { color: var(--ink-dim); font-weight: 400; }
 
 button.primary {
   width: 100%;
-  min-height: 48px;
-  margin-top: 6px;
-  padding: 13px;
-  background: transparent;
-  border: 1px solid var(--ink-dim);
+  min-height: 50px;
+  margin-top: 8px;
+  padding: 14px;
+  background: linear-gradient(180deg, rgba(201, 169, 97, 0.16), rgba(201, 169, 97, 0.05));
+  border: 1px solid var(--brass-dim);
   border-radius: 2px;
-  color: var(--ink);
+  color: #F2E6CB;
   font-family: var(--mincho);
-  font-size: 17px;
-  letter-spacing: 0.3em;
-  text-indent: 0.3em;
+  font-size: 18px;
+  letter-spacing: 0.36em;
+  text-indent: 0.36em;
   cursor: pointer;
 }
-button.primary:active { background: #1F2836; }
+button.primary:active { background: rgba(201, 169, 97, 0.2); }
 
-/* --- output sections ----------------------------------------------------- */
+/* --- sections ------------------------------------------------------------ */
 
-.output { padding-top: 8px; }
-
-.section { margin-top: 30px; }
+.output { padding-top: 6px; }
+.section { margin-top: 34px; }
 .section > h2 {
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 400;
-  letter-spacing: 0.2em;
-  color: var(--ink-dim);
-  margin: 0 0 12px;
-  padding-bottom: 7px;
+  letter-spacing: 0.26em;
+  color: var(--brass);
+  opacity: 0.85;
+  margin: 0 0 14px;
+  padding-bottom: 8px;
   border-bottom: 1px solid var(--rule);
 }
 
-/* --- the chart ----------------------------------------------------------- */
+/* --- 天盤 ---------------------------------------------------------------- */
 
-/* Genuinely vertical, per §5.3: writing-mode does the work, not rotation.
-   In vertical-rl the block flow runs right to left, so the first pillar in
-   source order (年) lands on the right, which is the conventional order. */
+.dial-wrap { margin: 4px -4px 0; }
+.dial { width: 100%; height: auto; display: block; overflow: visible; }
+
+.dial-rim { fill: none; stroke: var(--brass-dim); stroke-width: 1; }
+.dial-rule { fill: none; stroke: var(--brass-faint); stroke-width: 1; }
+
+.sector { fill: rgba(201, 169, 97, 0.035); stroke: var(--brass-faint); stroke-width: 0.7; }
+.sector.is-live {
+  fill: rgba(201, 169, 97, 0.16);
+  stroke: var(--brass-dim);
+  stroke-width: 1;
+}
+.sector-label {
+  font-family: var(--mincho);
+  font-size: 15px;
+  fill: var(--ink-faint);
+  transition: fill 400ms ease, font-size 400ms ease;
+}
+.sector-label.is-live { fill: #F4E7C8; font-size: 18px; }
+
+.tick { stroke: var(--brass-faint); stroke-width: 1; }
+.tick-setsu { stroke: var(--brass-dim); stroke-width: 1.4; }
+
+/* 立春: the origin the whole ordering is measured from. */
+.origin-mark { fill: var(--cinnabar); }
+
+.sun { fill: #FFE9A8; }
+.sun-ray {
+  stroke: rgba(255, 233, 168, 0.32);
+  stroke-width: 1;
+  stroke-dasharray: 2 5;
+}
+
+.hour-sector { fill: rgba(90, 143, 216, 0.05); stroke: var(--brass-faint); stroke-width: 0.7; }
+.hour-sector.is-live { fill: rgba(201, 169, 97, 0.14); stroke: var(--brass-dim); }
+.hour-label {
+  font-family: var(--mincho);
+  font-size: 12px;
+  fill: var(--ink-faint);
+  transition: fill 400ms ease;
+}
+.hour-label.is-live { fill: var(--ink); font-size: 14px; }
+
+/* The two clocks. The angle between them is the correction. */
+.hand { transform-box: view-box; transform-origin: 180px 180px; }
+.hand-line { stroke-width: 2; stroke-linecap: round; }
+.hand-standard .hand-line { stroke: var(--ink-dim); stroke-dasharray: 4 3; }
+.hand-standard .hand-tip { fill: var(--ink-faint); }
+.hand-apparent .hand-line { stroke: #F7E9C6; stroke-width: 2.5; }
+.hand-apparent .hand-tip { fill: #F4E7C8; }
+.hand.is-active .hand-line { filter: url(#soft-glow); }
+/* The wedge between the two clocks. At 27 minutes this is only ~7° wide, so it
+   is lit brightly and the exact times are also printed below the dial — the
+   geometry stays honest instead of being exaggerated to look impressive. */
+.clock-gap { fill: rgba(201, 169, 97, 0.22); }
+
+/* The error bar, swept around the active clock. */
+.error-arc {
+  fill: none;
+  stroke: var(--cinnabar);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.core-stem {
+  font-family: var(--mincho);
+  font-size: 46px;
+  fill: var(--ink);
+}
+.core-stem.el-wood  { fill: var(--el-wood); }
+.core-stem.el-fire  { fill: var(--el-fire); }
+.core-stem.el-earth { fill: var(--el-earth); }
+.core-stem.el-metal { fill: var(--el-metal); }
+.core-stem.el-water { fill: var(--el-water); }
+.core-caption { font-size: 8.5px; letter-spacing: 0.3em; fill: var(--ink-faint); }
+.dial-note { font-size: 11px; letter-spacing: 0.2em; fill: var(--ink-faint); }
+
+.dial-readout {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 6px 10px;
+  align-items: center;
+  margin-top: 10px;
+  padding: 11px 13px;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  background: rgba(18, 27, 40, 0.42);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.dial-readout i { width: 16px; height: 2px; border-radius: 1px; display: block; }
+.dial-readout .k-std { background: var(--ink-dim); }
+.dial-readout .k-app { background: var(--brass); }
+.dial-readout .k-err { background: var(--cinnabar); }
+.dial-readout .ro-name { color: var(--ink-dim); font-family: var(--gothic); font-size: 11.5px; }
+.dial-readout .ro-value { text-align: right; color: var(--ink); }
+.dial-readout .ro-value.dim { color: var(--ink-dim); }
+.dial-readout .ro-delta { color: var(--brass); }
+
+/* --- the four pillars ---------------------------------------------------- */
+
 /* In vertical-rl the inline axis runs top-to-bottom and the block axis runs
    right-to-left, which inverts what flex-direction means. `column` on the
-   chart therefore lays the pillars out horizontally, right to left, and `row`
-   inside a pillar stacks its characters downwards. Swapping these two is what
-   makes a "vertical" chart come out sideways. */
+   chart lays the pillars out horizontally, right to left; `row` inside a
+   pillar stacks its characters downwards. Swapping these two is what makes a
+   "vertical" chart come out sideways. */
 .chart {
   writing-mode: vertical-rl;
   text-orientation: upright;
@@ -205,99 +362,142 @@ button.primary:active { background: #1F2836; }
   justify-content: space-around;
   align-items: flex-start;
   font-family: var(--mincho);
-  padding: 20px 10px 18px;
+  padding: 22px 10px 20px;
   border-top: 1px solid var(--rule-strong);
   border-bottom: 1px solid var(--rule-strong);
-  /* An orthogonal flow sizes its block axis (here, the width) to content, so
-     the width has to be asked for explicitly to spread the four pillars. */
+  background: linear-gradient(180deg, rgba(18, 27, 40, 0.5), rgba(7, 12, 20, 0.2));
+  /* An orthogonal flow sizes its block axis (the width) to content, so the
+     width has to be asked for explicitly to spread the four pillars. */
   width: 100%;
   overflow-x: auto;
 }
 
-.pillar {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 15px;
-}
-/* Left as normal inline flow: in vertical-rl the inline axis already runs
-   downwards, so the two characters stack without any flex involvement. Making
-   this a flex container collapses the glyphs to zero inline size. */
+.pillar { display: flex; flex-direction: row; align-items: center; gap: 15px; }
+/* Left as normal inline flow: the inline axis already runs downwards, so the
+   two characters stack without any flex involvement. Making this a flex
+   container collapses the glyphs to zero inline size. */
 .pillar-glyphs { display: block; text-align: center; }
 
 .pillar-label {
-  font-size: 11px;
-  color: var(--ink-dim);
-  letter-spacing: 0.2em;
+  font-size: 10px;
+  color: var(--brass);
+  opacity: 0.7;
+  letter-spacing: 0.24em;
   font-family: var(--gothic);
 }
 
 .glyph {
   position: relative;
   display: inline-block;
-  font-size: 40px;
+  font-size: 42px;
   line-height: 1.3;
+  color: #EFE9DB;
+  text-shadow: 0 0 18px var(--mark, transparent);
 }
-
 /* The element mark: a thin rule alongside the character. Physical positioning
-   is used deliberately — the writing mode is known and fixed here. */
+   is deliberate — the writing mode is known and fixed here. */
 .glyph::before {
   content: "";
   position: absolute;
-  left: -7px;
+  left: -8px;
   top: 50%;
   transform: translateY(-50%);
   width: 2px;
-  height: 26px;
+  height: 27px;
   background: var(--mark, transparent);
   border-radius: 1px;
+  box-shadow: 0 0 7px var(--mark, transparent);
 }
-.glyph.wood  { --mark: var(--wood); }
-.glyph.fire  { --mark: var(--fire); }
-.glyph.earth { --mark: var(--earth); }
-.glyph.metal { --mark: var(--metal); }
-.glyph.water { --mark: #4A6FA5; } /* 玄 is the ground, so water is marked in its lighter cast */
+.glyph.wood  { --mark: var(--el-wood); }
+.glyph.fire  { --mark: var(--el-fire); }
+.glyph.earth { --mark: var(--el-earth); }
+.glyph.metal { --mark: var(--el-metal); }
+.glyph.water { --mark: var(--el-water); }
 
 .pillar-empty {
   font-size: 22px;
   color: var(--ink-faint);
   font-family: var(--mono);
   writing-mode: horizontal-tb;
-  margin-block-start: 24px;
 }
 
-.pillar.changed .glyph { color: #E8E4DA; }
+/* The one place motion is spent: a pillar that changes physically swaps. */
+@keyframes swap-out {
+  from { transform: translateY(0); opacity: 1; }
+  to   { transform: translateY(-15px); opacity: 0; }
+}
+@keyframes swap-in {
+  from { transform: translateY(18px); opacity: 0; }
+  to   { transform: translateY(0); opacity: 1; }
+}
+.glyph.is-leaving { animation: swap-out 150ms ease forwards; }
+.glyph.is-entering { animation: swap-in 280ms cubic-bezier(.2,.7,.3,1) forwards; }
 
-/* --- the "27 minutes" toggle (§5.4) -------------------------------------- */
+/* --- 五行 balance -------------------------------------------------------- */
+
+.balance { display: grid; gap: 9px; }
+.balance-row { display: grid; grid-template-columns: 22px 1fr 20px; align-items: center; gap: 10px; }
+.balance-name { font-family: var(--mincho); font-size: 16px; }
+.balance-track {
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.05);
+  overflow: hidden;
+}
+.balance-fill { height: 100%; border-radius: 3px; }
+.balance-count { font-family: var(--mono); font-size: 12px; color: var(--ink-dim); text-align: right; }
+.balance-row.is-empty .balance-name,
+.balance-row.is-empty .balance-count { color: var(--ink-faint); opacity: 0.55; }
+.balance-sources {
+  margin: 10px 0 0;
+  font-size: 11px;
+  color: var(--ink-faint);
+  font-family: var(--mono);
+  line-height: 1.9;
+}
+
+.el-wood  { color: var(--el-wood); }
+.el-fire  { color: var(--el-fire); }
+.el-earth { color: var(--el-earth); }
+.el-metal { color: var(--el-metal); }
+.el-water { color: var(--el-water); }
+.bg-wood  { background: var(--el-wood); }
+.bg-fire  { background: var(--el-fire); }
+.bg-earth { background: var(--el-earth); }
+.bg-metal { background: var(--el-metal); }
+.bg-water { background: var(--el-water); }
+
+/* --- the correction toggle ----------------------------------------------- */
 
 .correction {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 13px 14px;
-  margin-bottom: 2px;
-  background: #161D27;
-  border: 1px solid var(--rule-strong);
-  border-radius: 2px;
+  padding: 14px 15px;
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  -webkit-backdrop-filter: blur(9px);
+  backdrop-filter: blur(9px);
 }
 .correction-text { min-width: 0; }
-.correction-title { font-size: 13px; letter-spacing: 0.06em; }
+.correction-title { font-size: 13px; letter-spacing: 0.08em; }
 .correction-sub {
   font-size: 11.5px;
   color: var(--ink-dim);
   font-family: var(--mono);
-  margin-top: 3px;
+  margin-top: 4px;
 }
 .switch {
   flex: 0 0 auto;
-  width: 52px;
+  width: 54px;
   height: 30px;
   min-height: 30px;
   padding: 0;
   border-radius: 15px;
   border: 1px solid var(--rule-strong);
-  background: #10161E;
+  background: rgba(7, 12, 20, 0.8);
   position: relative;
   cursor: pointer;
 }
@@ -308,124 +508,130 @@ button.primary:active { background: #1F2836; }
   width: 22px; height: 22px;
   border-radius: 50%;
   background: var(--ink-faint);
-  transition: transform 220ms ease, background 220ms ease;
+  transition: transform 260ms cubic-bezier(.2,.8,.25,1), background 260ms ease;
 }
-.switch[aria-pressed="true"] { border-color: var(--ink-dim); }
+.switch[aria-pressed="true"] { border-color: var(--brass-dim); }
 .switch[aria-pressed="true"]::after {
-  transform: translateX(22px);
-  background: var(--ink);
+  transform: translateX(24px);
+  background: var(--brass);
+  box-shadow: 0 0 12px rgba(201, 169, 97, 0.6);
 }
 
-/* The one place motion is allowed: a pillar that changes physically swaps. */
-@keyframes swap-out {
-  from { transform: translateY(0); opacity: 1; }
-  to   { transform: translateY(-14px); opacity: 0; }
-}
-@keyframes swap-in {
-  from { transform: translateY(16px); opacity: 0; }
-  to   { transform: translateY(0); opacity: 1; }
-}
-.glyph.is-leaving { animation: swap-out 150ms ease forwards; }
-.glyph.is-entering { animation: swap-in 260ms cubic-bezier(.2,.7,.3,1) forwards; }
-
-.verdict {
-  font-size: 12px;
-  color: var(--ink-dim);
-  margin: 10px 0 0;
-  min-height: 1.7em;
-}
+.verdict { font-size: 12.5px; color: var(--ink-dim); margin: 12px 0 0; min-height: 1.75em; }
 .verdict.moved { color: var(--ink); }
 .verdict .moved-pillar { color: var(--cinnabar); font-family: var(--mincho); }
 
 /* --- certainty ----------------------------------------------------------- */
 
-.state { margin: 16px 0 0; padding-left: 12px; border-left: 2px solid var(--rule-strong); }
-.state.determinate { border-color: var(--rule-strong); }
+.state { margin: 18px 0 0; padding-left: 13px; border-left: 2px solid var(--rule-strong); }
 .state.boundary { border-color: var(--cinnabar); }
-.state.unknown { border-color: var(--earth); }
-.state-title { font-size: 12.5px; letter-spacing: 0.1em; margin: 0 0 4px; }
+.state.unknown { border-color: var(--el-earth); }
+.state-title { font-size: 12.5px; letter-spacing: 0.14em; margin: 0 0 5px; color: var(--ink); }
 .state-body { font-size: 12.5px; color: var(--ink-dim); margin: 0; }
 .state-body .mono { color: var(--ink); }
 
-.parallel { display: grid; gap: 12px; margin-top: 14px; }
-.parallel-item { border: 1px solid var(--rule); border-radius: 2px; padding: 10px 12px; }
+.parallel { display: grid; gap: 12px; margin-top: 15px; }
+.parallel-item {
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: 11px 13px;
+  background: rgba(18, 27, 40, 0.45);
+}
 .parallel-head {
   display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
-  font-size: 12px; color: var(--ink-dim); margin-bottom: 6px;
+  font-size: 11.5px; color: var(--ink-dim); margin-bottom: 7px;
 }
-.parallel-pillars { font-family: var(--mincho); font-size: 21px; letter-spacing: 0.16em; }
-.parallel-share { font-family: var(--mono); font-size: 11.5px; color: var(--cinnabar); }
+.parallel-pillars { font-family: var(--mincho); font-size: 21px; letter-spacing: 0.18em; }
+.parallel-share { font-family: var(--mono); font-size: 11px; color: var(--cinnabar); white-space: nowrap; }
 
-/* --- tables (the 万年暦 register) ---------------------------------------- */
+/* --- registers ----------------------------------------------------------- */
 
 table { width: 100%; border-collapse: collapse; font-size: 12px; }
 th, td {
   text-align: left;
-  padding: 7px 8px 7px 0;
+  padding: 8px 8px 8px 0;
   border-bottom: 1px solid var(--rule);
   vertical-align: baseline;
 }
 th { font-weight: 400; color: var(--ink-dim); }
 td.num, td.mono, .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 td.num { text-align: right; padding-right: 0; white-space: nowrap; }
-tr.dominant td { color: var(--ink); }
-tr.dominant th { color: var(--ink); }
+tr.dominant td, tr.dominant th { color: var(--ink); }
 
 /* 朱 is spent only here: the ingress times. */
 .ingress { color: var(--cinnabar); font-family: var(--mono); }
 
-/* --- axes (§4.2) --------------------------------------------------------- */
+/* --- axes ---------------------------------------------------------------- */
 
 .axis { border-bottom: 1px solid var(--rule); }
 .axis:first-of-type { border-top: 1px solid var(--rule); }
 .axis-summary {
   display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
-  padding: 12px 0; cursor: default; list-style: none;
+  padding: 13px 0; cursor: default; list-style: none;
 }
 .axis.live .axis-summary { cursor: pointer; }
 .axis-summary::-webkit-details-marker { display: none; }
 .axis-name { font-size: 13px; }
-.axis-state { font-size: 11.5px; color: var(--ink-faint); font-family: var(--mono); text-align: right; }
+.axis-state { font-size: 11px; color: var(--ink-faint); font-family: var(--mono); text-align: right; }
 .axis.live .axis-state { color: var(--cinnabar); }
-.axis-detail { padding: 0 0 14px; }
-.axis-option { margin-bottom: 10px; }
-.axis-option-name { font-size: 12px; color: var(--ink-dim); }
-.axis-change { font-family: var(--mincho); font-size: 15px; letter-spacing: 0.08em; }
+.axis-detail { padding: 0 0 15px; }
+.axis-option { margin-bottom: 11px; }
+.axis-option-name { font-size: 11.5px; color: var(--ink-dim); }
+.axis-change { font-family: var(--mincho); font-size: 16px; letter-spacing: 0.1em; }
 .axis-change .from { color: var(--ink-faint); }
-.axis-change .arrow { color: var(--ink-faint); font-family: var(--mono); padding: 0 4px; }
+.axis-change .arrow { color: var(--brass); font-family: var(--mono); padding: 0 5px; }
 .axis-change .to { color: var(--ink); }
 
-/* --- notes --------------------------------------------------------------- */
+/* --- colophon ------------------------------------------------------------ */
 
 .colophon {
   max-width: 480px;
-  margin: 40px auto 0;
-  padding-top: 18px;
+  margin: 46px auto 0;
+  padding-top: 20px;
   border-top: 1px solid var(--rule);
   font-size: 11.5px;
-  line-height: 1.75;
+  line-height: 1.8;
   color: var(--ink-faint);
 }
-.colophon p { margin: 0 0 9px; }
+.colophon p { margin: 0 0 10px; }
 .colophon .caution { color: var(--ink-dim); }
-.colophon .version { font-size: 11px; }
+.colophon .version { font-size: 10.5px; }
 
 .notice {
-  margin: 20px 0;
-  padding: 12px;
+  margin: 22px 0;
+  padding: 13px;
   border: 1px solid var(--cinnabar);
-  border-radius: 2px;
+  border-radius: 3px;
   font-size: 13px;
+  background: rgba(212, 81, 74, 0.07);
 }
 
-/* --- motion ------------------------------------------------------------- */
+/* --- reveal -------------------------------------------------------------- */
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: none; }
+}
+.output > * { animation: rise 520ms cubic-bezier(.2,.7,.3,1) backwards; }
+.output > *:nth-child(2) { animation-delay: 60ms; }
+.output > *:nth-child(3) { animation-delay: 110ms; }
+.output > *:nth-child(4) { animation-delay: 150ms; }
+.output > *:nth-child(n+5) { animation-delay: 190ms; }
+
+/* --- motion -------------------------------------------------------------- */
 
 @media (prefers-reduced-motion: reduce) {
-  .switch::after { transition: none; }
+  .switch::after,
+  .sector-label, .hour-label { transition: none; }
+  .hand { transition: none; }
   .glyph.is-leaving, .glyph.is-entering { animation: none; }
+  .output > * { animation: none; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .hand { transition: transform 750ms cubic-bezier(.2,.8,.25,1); }
+  .clock-gap, .error-arc { transition: d 750ms cubic-bezier(.2,.8,.25,1); }
 }
 
 @media (min-width: 420px) {
-  .glyph { font-size: 46px; }
-  .chart { min-height: 250px; }
+  .glyph { font-size: 48px; }
 }
