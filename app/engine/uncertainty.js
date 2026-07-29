@@ -50,21 +50,34 @@ function candidateBoundaries(input, axes, minutes) {
 
   // Local-clock boundaries: convert each candidate hour on the neighbouring
   // days into an offset from the recorded time.
+  //
+  // Which hours are boundaries depends on the 子時 convention. Under 晩子時 the
+  // day turns at midnight and 23:00 is only an hour-branch change (亥→子).
+  // Under 早子時 the day has already turned at 23:00, so midnight changes
+  // nothing at all and is not a boundary.
+  const lateZi = axes.ziShi !== 'early';
   const local = centre.time.local;
-  const shift = local - centre.time.ut;
   for (let dayOffset = -1; dayOffset <= 1; dayOffset += 1) {
     const date = calendarDate(local + dayOffset);
     for (const hour of HOUR_BOUNDARIES) {
+      if (hour === 0 && !lateZi) continue;
       const boundaryLocal = julianDay(date.year, date.month, date.day, hour);
       if (Math.abs(boundaryLocal - local) > halfWidth + 1e-9) continue;
       const delta = (boundaryLocal - local) * 1440;
       if (Math.abs(delta) >= minutes) continue;
-      const kind = hour === 0 || hour === 23 ? 'day' : 'hour';
-      const label = hour === 0 ? '日界（地方時の0時）' : `${String(hour).padStart(2, '0')}時（時辰の境）`;
+
+      let kind = 'hour';
+      let label = `${String(hour).padStart(2, '0')}時（時辰の境）`;
+      if (hour === 0) {
+        kind = 'day';
+        label = '日界（地方時の0時）';
+      } else if (hour === 23 && !lateZi) {
+        kind = 'day';
+        label = '23時（早子時の日界）';
+      }
       if (!out.some((b) => Math.abs(b.offsetMinutes - delta) < 1e-6)) {
         out.push({ offsetMinutes: delta, kind, label });
       }
-      void shift;
     }
   }
 
@@ -88,12 +101,14 @@ export function resolveUncertainty(input, axes) {
     const chart = buildChart(input, axes);
     // With no recorded time the whole day is the window, so a term ingress on
     // that day still has to be surfaced; the hour pillar is simply absent.
-    const outcomes = partition(input, axes, 12 * 60);
+    // Only the ingress is swept: the day pillar comes from the civil date, and
+    // sweeping the local day boundary as well would report it as undetermined
+    // for every timeless record — noise, not information.
     return {
       state: 'unknown',
       minutes: null,
       chart,
-      outcomes,
+      outcomes: partition(input, axes, 12 * 60, ['term']),
       boundaries: candidateBoundaries(input, axes, 12 * 60).filter((b) => b.kind === 'term'),
     };
   }
@@ -113,8 +128,9 @@ export function resolveUncertainty(input, axes) {
  * The width of each piece is the natural frequency the spec asks for: "of the
  * ±30 minute window, two thirds is 庚辰" rather than a bare percentage.
  */
-function partition(input, axes, minutes) {
-  const boundaries = candidateBoundaries(input, axes, minutes);
+function partition(input, axes, minutes, kinds = null) {
+  const boundaries = candidateBoundaries(input, axes, minutes)
+    .filter((b) => !kinds || kinds.includes(b.kind));
   const edges = [-minutes, ...boundaries.map((b) => b.offsetMinutes), minutes];
   const outcomes = [];
 
@@ -131,6 +147,12 @@ function partition(input, axes, minutes) {
     } else {
       outcomes.push({ chart, fraction: width / (2 * minutes), spans: [[from, to]] });
     }
+  }
+
+  // Which outcome corresponds to the time actually written down; the others
+  // are what the record would mean if it were off by a few minutes.
+  for (const outcome of outcomes) {
+    outcome.containsRecorded = outcome.spans.some(([a, b]) => a <= 0 && b >= 0);
   }
 
   return outcomes.sort((a, b) => b.fraction - a.fraction);

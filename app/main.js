@@ -6,7 +6,7 @@
  * activity in the app's lifetime is fetching the bundled ephemeris at load.
  */
 
-import { initEphemeris, ephemerisVersion, deltaTSeconds } from './engine/swe.js';
+import { initEphemeris, ephemerisVersion, deltaTSeconds, withinEphemeris, EPHEMERIS_YEARS } from './engine/swe.js';
 import { buildChart, computeAllVariants, analyseAxes, DEFAULT_AXES } from './engine/chart.js';
 import { resolveUncertainty, PRECISIONS, precisionMinutes } from './engine/uncertainty.js';
 import {
@@ -74,15 +74,40 @@ form.addEventListener('submit', (event) => {
   const [year, month, day] = date.split('-').map(Number);
   const known = state.precision !== 'unknown';
   const [hour, minute] = known && time ? time.split(':').map(Number) : [12, 0];
+  const longitude = Number(document.getElementById('longitude').value);
+
+  if (!withinEphemeris(year)) {
+    showError(`同梱の天体暦は西暦 ${EPHEMERIS_YEARS.from} 年から ${EPHEMERIS_YEARS.to} 年までを収めています。`
+      + 'この範囲の外は、別の理論で近似した値に切り替わり、見た目には区別がつきません。'
+      + '範囲内の日付を入力してください。');
+    return;
+  }
+  if (!Number.isFinite(longitude)) {
+    showError('経度が読めません。東経を十進法で入力してください（岩見沢なら 141.79）。');
+    return;
+  }
 
   state.input = {
     year, month, day, hour, minute,
     precision: known && !time ? 'unknown' : state.precision,
-    longitude: Number(document.getElementById('longitude').value),
+    longitude,
     latitude: Number(document.getElementById('latitude').value),
   };
-  render();
+
+  try {
+    render();
+  } catch (error) {
+    // Better a stated failure than a chart that is quietly wrong (§6).
+    showError(`命式を立てられませんでした。${error && error.message ? error.message : ''}`);
+  }
 });
+
+function showError(message) {
+  output.hidden = false;
+  output.textContent = '';
+  downstreamNodes = [];
+  output.append(el('p', 'notice', message));
+}
 
 function currentAxes() {
   return { ...DEFAULT_AXES, solarTime: state.correction ? 'apparent' : 'standard' };
@@ -148,7 +173,11 @@ function render() {
     }
 
     // Everything downstream depends on the axis too, so rebuild it.
-    refreshDownstream(input, currentAxes());
+    try {
+      refreshDownstream(input, currentAxes());
+    } catch (error) {
+      showError(`命式を立て直せませんでした。${error && error.message ? error.message : ''}`);
+    }
   });
 
   refreshDownstream(input, axes);

@@ -40,15 +40,23 @@ export const AXES = [
 
 export const DEFAULT_AXES = { termMethod: 'teiki', solarTime: 'apparent', ziShi: 'late' };
 
-/** One chart under one set of axis choices. */
+/**
+ * One chart under one set of axis choices.
+ *
+ * `precision: 'unknown'` suppresses the hour pillar but does *not* discard the
+ * clock: the caller still supplies a representative time (noon), and the error
+ * bar sweeps it across the day. Folding the two concerns together — treating
+ * "no hour pillar" as "no time at all" — silently freezes that sweep, so a day
+ * containing a 節入り stops reporting that the month pillar is undetermined.
+ */
 export function buildChart(input, axes = DEFAULT_AXES) {
   const hourKnown = input.precision !== 'unknown';
   const time = normaliseTime({
     year: input.year,
     month: input.month,
     day: input.day,
-    hour: hourKnown ? input.hour : 12,
-    minute: hourKnown ? input.minute : 0,
+    hour: Number.isFinite(input.hour) ? input.hour : 12,
+    minute: Number.isFinite(input.minute) ? input.minute : 0,
     longitude: input.longitude,
     solarTime: axes.solarTime,
   });
@@ -64,13 +72,8 @@ export function buildChart(input, axes = DEFAULT_AXES) {
 
 /** Build a chart at an offset, in minutes, from the recorded time. */
 export function buildChartAtOffset(input, axes, offsetMinutes) {
-  const hourKnown = input.precision !== 'unknown';
-  const baseHour = hourKnown ? input.hour : 12;
-  const baseMinute = hourKnown ? input.minute : 0;
-  return buildChart(
-    { ...input, hour: baseHour, minute: baseMinute + offsetMinutes, precision: input.precision },
-    axes,
-  );
+  const minute = (Number.isFinite(input.minute) ? input.minute : 0) + offsetMinutes;
+  return buildChart({ ...input, minute }, axes);
 }
 
 function cartesian() {

@@ -11,7 +11,9 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import SwissEph from '../vendor/swisseph-wasm/src/swisseph.js';
-import { initEphemeris, ephemerisVersion, sunLongitude, equationOfTime, sunCrossing, julianDay, calendarDate, deltaTSeconds } from '../app/engine/swe.js';
+import { initEphemeris, ephemerisVersion, sunLongitude, equationOfTime, sunCrossing, julianDay, calendarDate, deltaTSeconds, withinEphemeris, EPHEMERIS_YEARS } from '../app/engine/swe.js';
+import { buildChart, buildChartAtOffset, DEFAULT_AXES } from '../app/engine/chart.js';
+import { resolveUncertainty } from '../app/engine/uncertainty.js';
 import { trueTermPeriod, meanTermPeriod, degreesSinceRisshun, SETSU } from '../app/engine/terms.js';
 import { computePillars, TIGER_MONTH_STEM, RAT_HOUR_STEM, DAY_PILLAR_OFFSET, pillarFromIndex, STEMS, BRANCHES } from '../app/engine/pillars.js';
 import { japanOffsetHours } from '../app/engine/time.js';
@@ -25,13 +27,13 @@ function record(section, name, passed, detail) {
   if (!passed) failures += 1;
 }
 
+// Rounded on the Julian Day, so a time rounding up through midnight moves the
+// date with it rather than producing 24:00 on the day before.
 const jstString = (jd) => {
-  const r = calendarDate(jd + 9 / 24);
-  const h = Math.floor(r.hour);
-  let m = Math.round((r.hour - h) * 60);
-  let hh = h;
-  if (m === 60) { m = 0; hh += 1; }
-  return `${r.year}-${String(r.month).padStart(2, '0')}-${String(r.day).padStart(2, '0')} ${String(hh).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  const r = calendarDate(Math.round((jd + 9 / 24) * 1440) / 1440);
+  const total = Math.round(r.hour * 60);
+  return `${r.year}-${String(r.month).padStart(2, '0')}-${String(r.day).padStart(2, '0')} `
+    + `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
 };
 
 await initEphemeris();
@@ -312,6 +314,132 @@ const DAY_PILLARS = [
   const consistent = after.month.stem === (TIGER_MONTH_STEM[after.year.stem] + 0) % 10;
   record('year boundary', '月干 stays consistent with 年干 across 立春',
     consistent, `五虎遁(${STEMS[after.year.stem]}) → 寅月 ${STEMS[TIGER_MONTH_STEM[after.year.stem]]}寅`);
+}
+
+// --- §2.5  the error bar must actually sweep -------------------------------
+// Regression: treating "no hour pillar" as "no clock" froze the sweep, so a
+// timeless record on a day containing a 節入り wrongly reported one outcome.
+{
+  const onRisshunDay = {
+    year: 2024, month: 2, day: 4, hour: 12, minute: 0,
+    precision: 'unknown', longitude: 141.79,
+  };
+  const resolved = resolveUncertainty(onRisshunDay, DEFAULT_AXES);
+  const charts = resolved.outcomes.map((o) => o.chart.pillars.year.text + o.chart.pillars.month.text);
+  record('error bar', '時刻不明でも節入りを含む日は月柱・年柱が割れる',
+    resolved.outcomes.length === 2 && charts.includes('癸卯乙丑') && charts.includes('甲辰丙寅'),
+    `${resolved.outcomes.length} outcomes: ${charts.join(' / ')}`);
+
+  const shifted = buildChartAtOffset(onRisshunDay, DEFAULT_AXES, 600);
+  const back = buildChartAtOffset(onRisshunDay, DEFAULT_AXES, -600);
+  record('error bar', 'buildChartAtOffset shifts the clock for timeless records too',
+    shifted.signature !== back.signature, `${back.signature} vs ${shifted.signature}`);
+
+  // A determinate record must stay determinate.
+  const midday = { ...onRisshunDay, hour: 6, minute: 0, precision: 'pm1' };
+  record('error bar', 'a record far from any boundary reports 確定',
+    resolveUncertainty(midday, DEFAULT_AXES).state === 'determinate',
+    resolveUncertainty(midday, DEFAULT_AXES).state);
+}
+
+// --- §2.4  the repeated hour at the end of daylight saving ------------------
+{
+  const probe = (y, mo, d, h) => japanOffsetHours(julianDay(y, mo, d, h));
+  const repeated = probe(1948, 9, 12, 0.5); // 00:30 — happens twice
+  const once = probe(1948, 9, 12, 1.5); // 01:30 JST — happens once
+  const summer = probe(1948, 7, 1, 12);
+  record('time zone', 'the hour repeated by the DST fall-back is flagged, the next hour is not',
+    repeated.ambiguous === true && once.ambiguous === false && summer.ambiguous === false
+    && once.offsetHours === 9 && summer.offsetHours === 10,
+    `00:30 ambiguous=${repeated.ambiguous}, 01:30 ambiguous=${once.ambiguous} (UTC+${once.offsetHours})`);
+}
+
+// --- ephemeris coverage -----------------------------------------------------
+// Outside the bundled files Swiss Ephemeris does not error: it switches to
+// Moshier and says so only in serr. The input range is enforced against this.
+{
+  const raw = new SwissEph();
+  await raw.initSwissEph();
+  const flagAt = (year) => {
+    const res = raw.SweModule._malloc(48);
+    const err = raw.SweModule._malloc(256);
+    const rf = raw.SweModule.ccall('swe_calc_ut', 'number',
+      ['number', 'number', 'number', 'pointer', 'pointer'],
+      [raw.julday(year, 6, 15, 12), 0, 2, res, err]);
+    raw.SweModule._free(res);
+    raw.SweModule._free(err);
+    return rf;
+  };
+  const inside = flagAt(1800) === 2 && flagAt(2399) === 2;
+  const outside = flagAt(1799) === 4 && flagAt(2400) === 4;
+  record('ephemeris', `bundled files cover exactly ${EPHEMERIS_YEARS.from}-${EPHEMERIS_YEARS.to}`,
+    inside && outside && withinEphemeris(1800) && withinEphemeris(2399)
+    && !withinEphemeris(1799) && !withinEphemeris(2400),
+    'retFlag 2 (SWIEPH) inside the range, 4 (Moshier fallback) outside — the input range matches');
+}
+
+// --- structural invariants over the whole supported range -------------------
+// A deterministic sweep, so the result is reproducible. These invariants are
+// what "the board is computed without compromise" reduces to mechanically: if
+// any of them can be broken by some date, the chart is not trustworthy.
+{
+  let seed = 20240204;
+  const rnd = (a, b) => {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    return a + (seed % (b - a + 1));
+  };
+  const precisions = ['pm1', 'pm5', 'pm30', 'unknown'];
+  const broken = { threw: 0, month: 0, hour: 0, period: 0, fraction: 0 };
+  const samples = 400;
+
+  for (let i = 0; i < samples; i += 1) {
+    const input = {
+      year: rnd(EPHEMERIS_YEARS.from, EPHEMERIS_YEARS.to),
+      month: rnd(1, 12),
+      day: rnd(1, 28),
+      hour: rnd(0, 23),
+      minute: rnd(0, 59),
+      precision: precisions[rnd(0, 3)],
+      longitude: 122 + rnd(0, 3200) / 100,
+    };
+    let chart;
+    try {
+      chart = buildChart(input, DEFAULT_AXES);
+    } catch {
+      broken.threw += 1;
+      continue;
+    }
+    const { year, month, day, hour, period } = chart.pillars;
+
+    if (month.stem !== (TIGER_MONTH_STEM[year.stem] + ((month.branch - 2) % 12 + 12) % 12) % 10) broken.month += 1;
+    if (hour && hour.stem !== (RAT_HOUR_STEM[day.stem] + hour.branch) % 10) broken.hour += 1;
+    if (!(period.start <= chart.time.ut && chart.time.ut < period.end)) broken.period += 1;
+
+    const total = resolveUncertainty(input, DEFAULT_AXES).outcomes
+      .reduce((sum, o) => sum + o.fraction, 0);
+    if (Math.abs(total - 1) > 1e-6) broken.fraction += 1;
+  }
+
+  const clean = Object.values(broken).every((v) => v === 0);
+  record('invariants', `${samples} charts across ${EPHEMERIS_YEARS.from}-${EPHEMERIS_YEARS.to}, all precisions`,
+    clean,
+    clean
+      ? '月干=五虎遁(年干), 時干=五鼠遁(日干), 出生時刻 ∈ [節入り, 次の節入り), 誤差棒の合計=1 — すべて成立'
+      : JSON.stringify(broken));
+
+  // The day pillar must advance by exactly one per civil day, with no gap at
+  // month or year ends.
+  let dayBreaks = 0;
+  for (let i = 0; i < 200; i += 1) {
+    const y = rnd(EPHEMERIS_YEARS.from, EPHEMERIS_YEARS.to - 1);
+    const m = rnd(1, 12);
+    const d = rnd(1, 27);
+    const a = pillarFromIndex(Math.floor(julianDay(y, m, d, 12) + 0.5) + DAY_PILLAR_OFFSET);
+    const b = pillarFromIndex(Math.floor(julianDay(y, m, d + 1, 12) + 0.5) + DAY_PILLAR_OFFSET);
+    if ((b.stem - a.stem + 10) % 10 !== 1 || (b.branch - a.branch + 12) % 12 !== 1) dayBreaks += 1;
+  }
+  record('invariants', 'day pillar advances by exactly one per civil day',
+    dayBreaks === 0, `${200 - dayBreaks}/200 consecutive pairs step by one`);
 }
 
 // --- report -----------------------------------------------------------------

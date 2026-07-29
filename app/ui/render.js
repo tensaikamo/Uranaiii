@@ -21,20 +21,25 @@ export function el(tag, className, text) {
   return node;
 }
 
-/** JST wall-clock rendering of a UT Julian Day. */
+/**
+ * JST wall-clock rendering of a UT Julian Day.
+ *
+ * The rounding is done on the Julian Day, before the calendar conversion, so a
+ * time that rounds up through midnight carries the date with it. Rounding the
+ * decomposed hour/minute/second instead produces 24:00 on the previous date —
+ * or, worse, 23:61.
+ */
 export function formatJst(jd, withSeconds = false) {
-  const d = calendarDate(jd + 9 / 24);
-  const h = Math.floor(d.hour);
-  const minFloat = (d.hour - h) * 60;
-  let m = withSeconds ? Math.floor(minFloat) : Math.round(minFloat);
-  let hh = h;
-  let s = Math.round((minFloat - Math.floor(minFloat)) * 60);
-  if (s === 60) { s = 0; m += 1; }
-  if (m === 60) { m = 0; hh += 1; }
+  const unit = withSeconds ? 1 / 86400 : 1 / 1440;
+  const d = calendarDate(Math.round((jd + 9 / 24) / unit) * unit);
+  const total = Math.round(d.hour / (withSeconds ? 1 / 3600 : 1 / 60));
+  const hh = withSeconds ? Math.floor(total / 3600) : Math.floor(total / 60);
+  const mm = withSeconds ? Math.floor(total / 60) % 60 : total % 60;
+  const ss = total % 60;
   const date = `${d.year}-${String(d.month).padStart(2, '0')}-${String(d.day).padStart(2, '0')}`;
   const time = withSeconds
-    ? `${String(hh).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
-    : `${String(hh).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    ? `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`
+    : `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
   return `${date} ${time}`;
 }
 
@@ -104,22 +109,34 @@ export function updateChartElement(root, chart) {
     let columnChanged = false;
     glyphs.forEach((node, i) => {
       const [char, element] = next[i];
-      if (node.dataset.char === char) return;
+      // Compare against the character this glyph is *on its way to*, not the
+      // one currently painted. Toggling again inside the 150ms leave animation
+      // would otherwise look like "no change" while the earlier animation's
+      // pending callback still lands, stranding the chart on the wrong state.
+      const target = node.dataset.pending || node.dataset.char;
+      if (target === char) return;
       columnChanged = true;
+      node.dataset.pending = char;
+      node.dataset.pendingElement = element;
+
       const apply = () => {
-        node.textContent = char;
-        node.dataset.char = char;
-        node.className = `glyph ${element}`;
-        if (!instant) {
-          node.classList.add('is-entering');
-          node.addEventListener('animationend', () => node.classList.remove('is-entering'), { once: true });
-        }
+        // Always paint the latest requested target, not the one captured when
+        // the animation started.
+        node.textContent = node.dataset.pending;
+        node.dataset.char = node.dataset.pending;
+        node.className = `glyph ${node.dataset.pendingElement}`;
+        delete node.dataset.pending;
+        delete node.dataset.pendingElement;
       };
+
       if (instant) { apply(); return; }
+      if (node.classList.contains('is-leaving')) return; // already animating out
       node.classList.add('is-leaving');
       node.addEventListener('animationend', () => {
         node.classList.remove('is-leaving');
         apply();
+        node.classList.add('is-entering');
+        node.addEventListener('animationend', () => node.classList.remove('is-entering'), { once: true });
       }, { once: true });
     });
     if (columnChanged) changed.push(key);
@@ -161,7 +178,9 @@ export function buildStateElement(resolution) {
   const body = el('p', 'state-body');
   body.append(document.createTextNode('±'));
   body.append(el('span', 'mono', String(resolution.minutes)));
-  body.append(document.createTextNode(`分の幅が ${kinds} をまたぐ。どちらかは、この記録からは決まらない。`));
+  const many = resolution.outcomes.length > 2;
+  body.append(document.createTextNode(
+    `分の幅が ${kinds} をまたぐ。${many ? 'どれになるか' : 'どちらか'}は、この記録からは決まらない。`));
   box.append(body);
   box.append(buildParallel(resolution));
   return box;
@@ -170,7 +189,9 @@ export function buildStateElement(resolution) {
 /** Both charts, side by side, with the share of the window each occupies. */
 function buildParallel(resolution) {
   const list = el('div', 'parallel');
-  const base = resolution.outcomes[0];
+  // Differences are named relative to the chart the record actually gives, not
+  // to whichever outcome happens to occupy the most of the window.
+  const base = resolution.outcomes.find((o) => o.containsRecorded) || resolution.outcomes[0];
 
   for (const outcome of resolution.outcomes) {
     const item = el('div', 'parallel-item');
@@ -184,7 +205,10 @@ function buildParallel(resolution) {
       })
       .map(([key]) => PILLAR_NAME[key]);
 
-    head.append(el('span', null, differing.length ? differing.join('・') : '同じ命式'));
+    // Naming the row by what differs from the base is only meaningful for the
+    // alternatives; the base row is named by what it is — the recorded time.
+    head.append(el('span', null,
+      outcome.containsRecorded ? '記録どおりの時刻' : `${differing.join('・') || '同じ命式'} が変わる`));
     head.append(el('span', 'parallel-share',
       `幅のうち ${naturalFrequency(outcome.fraction)}`));
     item.append(head);
@@ -208,12 +232,16 @@ export function buildTermElement(chart) {
   const table = el('table');
   const body = el('tbody');
 
+  // The two ingresses that bracket the birth, with the month branch they imply
+  // between them. The governing 立春 is labelled by its role, not just by name:
+  // near 立春 it is a different instant from the "next 節" row above and showing
+  // both as plain "立春" reads as a contradiction.
   const rows = [
-    [`${period.term.name}（黄経 ${period.term.longitude}°）`, formatJst(period.start, true), true],
-    ['この命式の月支', period.term.name === '' ? '' : chart.pillars.month.branchChar, false],
-    [`${period.next.name}（黄経 ${period.next.longitude}°）`, formatJst(period.end, true), true],
+    [`直前の節　${period.term.name}（黄経 ${period.term.longitude}°）`, formatJst(period.start, true), true],
+    ['　　→ 月支', chart.pillars.month.branchChar, false],
+    [`次の節　${period.next.name}（黄経 ${period.next.longitude}°）`, formatJst(period.end, true), true],
     ['出生時の太陽黄経', `${period.longitude.toFixed(4)}°`, false],
-    ['立春（年柱の境）', formatJst(chart.pillars.risshun, true), true],
+    [`年柱の起点となった立春（${chart.pillars.solarYear}年）`, formatJst(chart.pillars.risshun, true), true],
   ];
 
   for (const [label, value, cinnabar] of rows) {

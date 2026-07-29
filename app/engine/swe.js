@@ -13,6 +13,21 @@ export const SE_SUN = 0;
 export const SEFLG_SWIEPH = 2;
 export const GREGORIAN = 1;
 
+/**
+ * Calendar years the bundled ephemeris files actually cover.
+ *
+ * `sepl_18.se1` and its companions span 1800-2399. Outside that, Swiss
+ * Ephemeris does not fail — it quietly falls back to the built-in Moshier
+ * theory and returns a slightly different answer with no visible sign. That is
+ * a silent change of method, so the range is enforced at the input instead of
+ * letting the fallback happen unannounced.
+ */
+export const EPHEMERIS_YEARS = { from: 1800, to: 2399 };
+
+export function withinEphemeris(year) {
+  return year >= EPHEMERIS_YEARS.from && year <= EPHEMERIS_YEARS.to;
+}
+
 let swe = null;
 
 export async function initEphemeris() {

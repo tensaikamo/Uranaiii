@@ -28,7 +28,10 @@
   <form id="form" class="panel" hidden autocomplete="off">
     <div class="field">
       <label for="birthdate">生年月日</label>
-      <input type="date" id="birthdate" name="birthdate" value="1990-06-15" required>
+      <!-- Bounded by the bundled ephemeris files (1800-2399); outside that
+           range Swiss Ephemeris silently switches theory. -->
+      <input type="date" id="birthdate" name="birthdate" value="1990-06-15"
+             min="1800-01-01" max="2399-12-31" required>
     </div>
 
     <div class="field">
@@ -55,6 +58,10 @@
     <p class="hint">
       既定は北海道岩見沢市。都市名検索は置かない — 地名を引くと外部に通信が出るため
       （<a href="#privacy">送信ゼロ</a>）。緯度は記録として受け取るが、命式に効くのは経度だけ。
+    </p>
+    <p class="hint">
+      <strong>日本国内の出生に限る。</strong>標準時は UTC+9 固定で、1948〜1951年の
+      夏時刻のみ +1時間として扱う。国外の歴史的タイムゾーンには対応していない。
     </p>
 
     <button type="submit" class="primary" id="cast">命式を立てる</button>

@@ -74,11 +74,14 @@ export function trueTermPeriod(jdUt) {
  */
 function lastCrossingAtOrBefore(lonDeg, jdUt) {
   let candidate = sunCrossing(lonDeg, jdUt - 400);
-  for (;;) {
+  // Each step advances by about a tropical year, so two are always enough; the
+  // bound exists so a malformed return from the ephemeris cannot spin forever.
+  for (let guard = 0; guard < 4; guard += 1) {
     const next = sunCrossing(lonDeg, candidate + 10);
-    if (next > jdUt) return candidate;
+    if (!Number.isFinite(next) || next <= candidate || next > jdUt) return candidate;
     candidate = next;
   }
+  return candidate;
 }
 
 /** The 冬至 at or before jdUt, plus the following one. */

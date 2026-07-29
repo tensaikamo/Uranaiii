@@ -52,16 +52,17 @@ export function japanOffsetHours(wallJd) {
   for (const { start, end } of dstIntervals()) {
     const wallStart = start + 10 / 24; // clock jumps 24:00 -> 01:00 JDT
     const wallEnd = end + 10 / 24; // clock falls 01:00 JDT -> 00:00 JST
-    if (wallJd >= wallStart && wallJd < wallEnd) {
-      return { offsetHours: 10, daylightSaving: true, ambiguous: false };
-    }
-    // The hour immediately after the fall-back is lived through twice.
-    if (wallJd >= wallEnd - 1 / 24 && wallJd < wallEnd) {
-      return { offsetHours: 10, daylightSaving: true, ambiguous: true };
-    }
-    if (wallJd >= wallEnd && wallJd < wallEnd + 1 / 24) {
-      return { offsetHours: 9, daylightSaving: false, ambiguous: true };
-    }
+    if (wallJd < wallStart || wallJd >= wallEnd) continue;
+    // The last hour before the fall-back is lived through twice: 00:00-00:59
+    // reads the same on the clock whether it is still JDT or already JST. The
+    // record cannot say which, so the earlier (JDT) reading is used and the
+    // ambiguity is reported rather than hidden. The hour *after* the
+    // transition, 01:00-01:59 JST, happens once and is not ambiguous.
+    return {
+      offsetHours: 10,
+      daylightSaving: true,
+      ambiguous: wallJd >= wallEnd - 1 / 24,
+    };
   }
   return { offsetHours: 9, daylightSaving: false, ambiguous: false };
 }
@@ -112,6 +113,5 @@ export function normaliseTime({ year, month, day, hour, minute, longitude, solar
     ambiguous,
     equationMinutes: equationDays * 1440,
     meridianMinutes: localMeridianOffsetMinutes(longitude),
-    totalShiftMinutes: (local - (ut + JAPAN_STANDARD_MERIDIAN / 360)) * 1440,
   };
 }
