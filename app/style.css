@@ -586,6 +586,56 @@ button.primary:active { background: rgba(201, 169, 97, 0.2); }
 .gloss th { font-family: var(--mincho); font-size: 14px; color: var(--ink); white-space: nowrap; padding-right: 12px; }
 .gloss td { font-size: 11.5px; color: var(--ink-dim); line-height: 1.75; }
 
+/* --- 語り page ----------------------------------------------------------- */
+
+/* States the change of register before anything else on the page. */
+.register {
+  max-width: 480px;
+  margin: 0 auto 6px;
+  padding: 13px 15px;
+  border: 1px solid var(--rule-strong);
+  border-left: 2px solid var(--cinnabar);
+  border-radius: 3px;
+  background: rgba(212, 81, 74, 0.06);
+  font-size: 12px;
+  line-height: 1.85;
+  color: var(--ink-dim);
+}
+.register strong { color: var(--ink); font-weight: 400; }
+.register a { color: var(--brass); }
+
+.voice-strip {
+  display: flex;
+  justify-content: space-around;
+  padding: 14px 8px;
+  margin-top: 20px;
+  border-top: 1px solid var(--rule-strong);
+  border-bottom: 1px solid var(--rule-strong);
+}
+.voice-cell { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.voice-cell-label { font-size: 9.5px; letter-spacing: 0.2em; color: var(--brass); opacity: 0.75; }
+.voice-cell-text { font-family: var(--mincho); font-size: 21px; letter-spacing: 0.06em; }
+
+.voice-item { margin-bottom: 20px; }
+.voice-item.is-lead .voice-text { font-size: 16px; }
+.voice-title {
+  margin: 0 0 8px;
+  font-family: var(--mincho);
+  font-size: 20px;
+  letter-spacing: 0.12em;
+  color: #F2E9D6;
+}
+.voice-text {
+  margin: 0;
+  font-family: var(--mincho);
+  font-size: 15px;
+  line-height: 2.05;
+  color: var(--ink);
+}
+.cite.is-freq { color: var(--brass); border-color: var(--brass-faint); }
+
+.colophon a { color: var(--brass); }
+
 /* --- the correction toggle ----------------------------------------------- */
 
 .correction {

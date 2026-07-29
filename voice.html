@@ -4,10 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="dark">
-<title>命式</title>
+<title>語り — 命式</title>
 <link rel="stylesheet" href="app/style.css">
 </head>
-<body>
+<body class="voice-page">
 
 <canvas id="sky" aria-hidden="true"></canvas>
 
@@ -16,13 +16,24 @@
 </noscript>
 
 <header class="masthead">
-  <h1>命式</h1>
-  <p class="subtitle">天文計算から立てる四柱</p>
+  <h1>語り</h1>
+  <p class="subtitle">伝統の口調で読む</p>
 </header>
 
 <main>
-  <!-- Shown until the ephemeris is ready; replaced by an explicit failure
-       message if it never loads, never left as a blank page. -->
+  <!--
+    The register change is stated up front, not buried. The board page destroys
+    any sentence it cannot tie to the eight characters; this page speaks about
+    the person, gives advice, and reads the year. Letting a reader assume the
+    two carry the same weight would be the one lie worth avoiding.
+  -->
+  <p class="register">
+    ここから先は<strong>伝統的な語り口</strong>で書く。人物のこと、助言、今年のこと。
+    盤のページが自分に禁じているものだ。
+    <a href="index.html">盤</a>は八字と突き合わせて検算できるが、こちらは
+    <strong>盤から離れたぶんだけ確からしさが落ちる</strong>。同じ重さで受け取らないこと。
+  </p>
+
   <div id="boot" class="boot">
     <p class="boot-line">計算エンジンを読み込んでいます</p>
   </div>
@@ -30,23 +41,13 @@
   <form id="form" class="panel" hidden autocomplete="off">
     <div class="field">
       <label for="birthdate">生年月日</label>
-      <!-- Bounded by the bundled ephemeris files (1800-2399); outside that
-           range Swiss Ephemeris silently switches theory. -->
       <input type="date" id="birthdate" name="birthdate" value="1990-06-15"
              min="1800-01-01" max="2399-12-31" required>
     </div>
-
     <div class="field">
       <label for="birthtime">出生時刻</label>
       <input type="time" id="birthtime" name="birthtime" value="06:20" step="60">
     </div>
-
-    <fieldset class="field">
-      <legend>時刻の確からしさ</legend>
-      <div id="precision" class="choices"></div>
-      <p class="hint" id="precision-hint"></p>
-    </fieldset>
-
     <div class="field-pair">
       <div class="field">
         <label for="longitude">東経</label>
@@ -58,38 +59,25 @@
       </div>
     </div>
     <p class="hint">
-      既定は北海道岩見沢市。都市名検索は置かない — 地名を引くと外部に通信が出るため
-      （<a href="#privacy">送信ゼロ</a>）。緯度は記録として受け取るが、命式に効くのは経度だけ。
+      盤のページとは入力を共有しない。どこにも保存していないので、持ち越す先が無い。
     </p>
-    <p class="hint">
-      <strong>日本国内の出生に限る。</strong>標準時は UTC+9 固定で、1948〜1951年の
-      夏時刻のみ +1時間として扱う。国外の歴史的タイムゾーンには対応していない。
-    </p>
-
-    <button type="submit" class="primary" id="cast">命式を立てる</button>
+    <button type="submit" class="primary" id="cast">読んでもらう</button>
   </form>
 
   <section id="output" class="output" hidden aria-live="polite"></section>
 </main>
 
 <footer class="colophon">
-  <p id="privacy">
-    入力値は端末の外に出ない。保存もしない（localStorage も使わない）。
-    天体暦は同梱で、読み込み後の通信は発生しない。
+  <p>
+    入力値は端末の外に出ない。保存もしない。読み込み後の通信は発生しない。
   </p>
   <p class="caution">
     命式の組み合わせは50万通りを超える。そのどれか一つが自分に当てはまることは、驚くべきことではない。
+    当たっていると感じたとき、その文が<strong>何件に1件の配置から出たか</strong>を見てほしい。
   </p>
-  <p class="version">
-    Swiss Ephemeris <span id="swe-version" class="mono">—</span> ／
-    検算の記録は <span class="mono">VERIFY.md</span>
-  </p>
-  <p class="version">
-    <a href="voice.html">伝統の口調で読む「語り」へ →</a>
-    　人物評・助言・年運がある。盤より確からしさは落ちる。
-  </p>
+  <p class="version"><a href="index.html">← 盤に戻る</a></p>
 </footer>
 
-<script type="module" src="app/main.js"></script>
+<script type="module" src="app/voice-main.js"></script>
 </body>
 </html>

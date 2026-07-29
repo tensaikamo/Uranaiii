@@ -15,6 +15,8 @@ import { initEphemeris, ephemerisVersion, sunLongitude, equationOfTime, sunCross
 import { buildChart, buildChartAtOffset, DEFAULT_AXES } from '../app/engine/chart.js';
 import { resolveUncertainty } from '../app/engine/uncertainty.js';
 import { readChart, readingSignature } from '../app/engine/reading.js';
+import { voiceStatements } from '../app/engine/voice.js';
+import { frequencyOf } from '../app/engine/rarity.js';
 import { trueTermPeriod, meanTermPeriod, degreesSinceRisshun, termPeriod, termIngresses, SETSU } from '../app/engine/terms.js';
 import { computePillars, TIGER_MONTH_STEM, RAT_HOUR_STEM, DAY_PILLAR_OFFSET, pillarFromIndex, STEMS, BRANCHES } from '../app/engine/pillars.js';
 import { japanOffsetHours } from '../app/engine/time.js';
@@ -519,6 +521,61 @@ const DAY_PILLARS = [
   record('reading (§8)', 'readings discriminate between charts (弁別率, by source not text)',
     discrimination > 0.8,
     `${signatures.size}/${samples} distinct source-combinations = ${(discrimination * 100).toFixed(1)}%`);
+}
+
+// --- the 語り page ----------------------------------------------------------
+// It is allowed to speak about the person, which the board reading is not. It
+// is still held to: every passage sourced, every cited character really on the
+// board, and every passage carrying a measured frequency — because the
+// frequency is the reader's only defence against a passage that feels uncanny
+// merely by being common.
+{
+  let seed = 77123;
+  const rnd = (a, b) => {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    return a + (seed % (b - a + 1));
+  };
+  const nowJd = julianDay(2026, 7, 29, 12);
+  let unsourced = 0;
+  let fabricated = 0;
+  let unmeasured = 0;
+  const signatures = new Set();
+  const samples = 300;
+
+  for (let i = 0; i < samples; i += 1) {
+    const chart = buildChart({
+      year: rnd(1930, 2030), month: rnd(1, 12), day: rnd(1, 28),
+      hour: rnd(0, 23), minute: rnd(0, 59), precision: 'pm5',
+      longitude: 122 + rnd(0, 3200) / 100,
+    }, DEFAULT_AXES);
+
+    const onBoard = new Set();
+    for (const key of ['year', 'month', 'day', 'hour']) {
+      const p = chart.pillars[key];
+      if (p) { onBoard.add(p.stemChar); onBoard.add(p.branchChar); }
+    }
+
+    const passages = voiceStatements(chart, nowJd);
+    for (const s of passages) {
+      if (!Array.isArray(s.source) || s.source.length === 0) { unsourced += 1; continue; }
+      for (const cite of s.source) {
+        const m = cite.match(/(?:_stem|_branch|干|支):(.)$/);
+        if (m && !onBoard.has(m[1])) fabricated += 1;
+      }
+      if (frequencyOf(s.key) === null) unmeasured += 1;
+    }
+    signatures.add(passages.map((s) => s.key).sort().join('|'));
+  }
+
+  record('語り (別ページ)', 'every passage is sourced',
+    unsourced === 0, `${unsourced} unsourced passages across ${samples} charts`);
+  record('語り (別ページ)', 'every cited character is actually on the board',
+    fabricated === 0, `${fabricated} citations naming a character not in the chart`);
+  record('語り (別ページ)', 'every passage carries a measured frequency',
+    unmeasured === 0, `${unmeasured} passages missing from the rarity table`);
+  record('語り (別ページ)', 'passages discriminate between charts',
+    signatures.size / samples > 0.3,
+    `${signatures.size}/${samples} distinct passage sets = ${((signatures.size / samples) * 100).toFixed(1)}%`);
 }
 
 // --- report -----------------------------------------------------------------
