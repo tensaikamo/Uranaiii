@@ -501,6 +501,37 @@ button.primary:active { background: rgba(201, 169, 97, 0.2); }
 
 /* --- the reading (§8) ---------------------------------------------------- */
 
+.reading-lead {
+  padding: 14px 15px;
+  margin-bottom: 6px;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  background: rgba(201, 169, 97, 0.06);
+}
+.reading-lead-text {
+  margin: 0;
+  font-family: var(--mincho);
+  font-size: 18px;
+  line-height: 1.8;
+  color: #F2E9D6;
+}
+
+.reading-group {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 22px 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.reading-group-label {
+  font-family: var(--mincho);
+  font-size: 15px;
+  color: var(--brass);
+  letter-spacing: 0.2em;
+}
+.reading-group-note { font-size: 11px; color: var(--ink-faint); }
+
 .reading { display: grid; gap: 14px; }
 .reading-item {
   border-left: 2px solid var(--brass-dim);
@@ -514,6 +545,15 @@ button.primary:active { background: rgba(201, 169, 97, 0.2); }
   color: var(--ink);
 }
 /* The citations are quiet but never hidden — they are the guarantee. */
+.reading-freq {
+  margin: 6px 0 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-faint);
+}
+/* An unusual configuration is the part of a chart worth looking at. */
+.reading-freq.is-rare { color: var(--brass); }
+
 .reading-source {
   margin: 7px 0 0;
   display: flex;
@@ -530,6 +570,21 @@ button.primary:active { background: rgba(201, 169, 97, 0.2); }
   padding: 1px 6px;
   white-space: nowrap;
 }
+
+.gloss { margin-top: 20px; border-top: 1px solid var(--rule); }
+.gloss-summary {
+  list-style: none;
+  padding: 11px 0;
+  font-size: 11.5px;
+  letter-spacing: 0.16em;
+  color: var(--brass);
+  cursor: pointer;
+}
+.gloss-summary::-webkit-details-marker { display: none; }
+.gloss-summary::after { content: " ＋"; color: var(--ink-faint); }
+.gloss[open] .gloss-summary::after { content: " −"; }
+.gloss th { font-family: var(--mincho); font-size: 14px; color: var(--ink); white-space: nowrap; padding-right: 12px; }
+.gloss td { font-size: 11.5px; color: var(--ink-dim); line-height: 1.75; }
 
 /* --- the correction toggle ----------------------------------------------- */
 

@@ -10,7 +10,7 @@
 import { calendarDate } from '../engine/swe.js';
 import { elementBalance, ELEMENTS, ELEMENT_NAMES } from '../engine/pillars.js';
 import { naturalFrequency } from '../engine/uncertainty.js';
-import { readChart } from '../engine/reading.js';
+import { readChart, summarise, describeFrequency, GROUPS, GLOSSARY } from '../engine/reading.js';
 
 const PILLAR_LABELS = [['year', '年'], ['month', '月'], ['day', '日'], ['hour', '時']];
 
@@ -434,11 +434,12 @@ export function buildBalanceElement(chart) {
 /* --- the reading (§8) ---------------------------------------------------- */
 
 /**
- * Render the reading with its citations attached.
+ * Render the reading.
  *
- * The sources are shown, not tucked away. That is the point: a reader can hold
- * every sentence against the board and check it. A sentence that could not be
- * checked would have been destroyed in readChart before reaching here.
+ * Delivered the way a reading is delivered: the whole first, then the parts,
+ * grouped by theme, rarest first within a group, with the jargon opened. What
+ * is *not* borrowed from the trade is any claim about the person — every line
+ * describes the board, and carries the citations to prove it.
  */
 export function buildReadingElement(chart) {
   const section = el('section', 'section');
@@ -450,22 +451,64 @@ export function buildReadingElement(chart) {
     return section;
   }
 
-  const list = el('div', 'reading');
-  for (const statement of statements) {
-    const item = el('div', 'reading-item');
-    item.append(el('p', 'reading-text', statement.text));
-    const cites = el('p', 'reading-source');
-    for (const src of statement.source) {
-      cites.append(el('span', 'cite', src));
+  // The whole, before the parts.
+  const summary = summarise(chart);
+  const lead = el('div', 'reading-lead');
+  lead.append(el('p', 'reading-lead-text', summary.text));
+  const leadCites = el('p', 'reading-source');
+  for (const src of summary.source) leadCites.append(el('span', 'cite', src));
+  lead.append(leadCites);
+  section.append(lead);
+
+  for (const group of GROUPS) {
+    const inGroup = statements.filter((s) => s.group === group.key);
+    if (inGroup.length === 0) continue;
+
+    const head = el('div', 'reading-group');
+    head.append(el('span', 'reading-group-label', group.label));
+    head.append(el('span', 'reading-group-note', group.note));
+    section.append(head);
+
+    const list = el('div', 'reading');
+    for (const statement of inGroup) {
+      const item = el('div', 'reading-item');
+      item.append(el('p', 'reading-text', statement.text));
+
+      // How common this configuration is. Measured, not asserted — and it
+      // argues against over-reading a line rather than for it.
+      const frequency = describeFrequency(statement.frequency);
+      if (frequency) {
+        const rare = statement.frequency !== null && statement.frequency < 0.1;
+        item.append(el('p', `reading-freq${rare ? ' is-rare' : ''}`, `この配置は ${frequency}`));
+      }
+
+      const cites = el('p', 'reading-source');
+      for (const src of statement.source) cites.append(el('span', 'cite', src));
+      item.append(cites);
+      list.append(item);
     }
-    item.append(cites);
-    list.append(item);
+    section.append(list);
   }
-  section.append(list);
+
+  const gloss = el('details', 'gloss');
+  const summaryEl = el('summary', 'gloss-summary', '語の意味');
+  gloss.append(summaryEl);
+  const table = el('table');
+  const body = el('tbody');
+  for (const [term, meaning] of GLOSSARY) {
+    const tr = el('tr');
+    tr.append(el('th', null, term));
+    tr.append(el('td', null, meaning));
+    body.append(tr);
+  }
+  table.append(body);
+  gloss.append(table);
+  section.append(gloss);
 
   section.append(el('p', 'hint',
     '各文には出典を必ず付けてある。盤の要素に紐づかない文は、UIで隠すのではなく'
-    + '生成の段階で捨てている。誰にでも当てはまる文を個人向けの顔で出さないため。'));
+    + '生成の段階で捨てている。誰にでも当てはまる文を個人向けの顔で出さないため。'
+    + '人物についての記述・予言・助言は書かない。'));
   return section;
 }
 
