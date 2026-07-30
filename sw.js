@@ -12,7 +12,7 @@
  * changing with them — the version is a hash of their contents.
  */
 
-const VERSION = '3d637da118bc';
+const VERSION = '51abf3d927fb';
 const CACHE = `meishiki-${VERSION}`;
 
 const FILES = [
@@ -25,6 +25,8 @@ const FILES = [
   "vendor/swisseph-wasm/wasm/swisseph.js",
   "vendor/swisseph-wasm/wasm/swisseph.wasm",
   "vendor/swisseph-wasm/wasm/swisseph.data",
+  "app/engine/agreement.js",
+  "app/engine/agreementRates.js",
   "app/engine/chart.js",
   "app/engine/domains.js",
   "app/engine/gauges.js",
@@ -33,6 +35,7 @@ const FILES = [
   "app/engine/luck.js",
   "app/engine/lunar.js",
   "app/engine/name.js",
+  "app/engine/numerology.js",
   "app/engine/oracle.js",
   "app/engine/pillars.js",
   "app/engine/places.js",
@@ -43,6 +46,7 @@ const FILES = [
   "app/engine/strength.js",
   "app/engine/strokes.js",
   "app/engine/swe.js",
+  "app/engine/systems.js",
   "app/engine/tenGods.js",
   "app/engine/terms.js",
   "app/engine/time.js",

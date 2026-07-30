@@ -30,7 +30,12 @@ import { oracleStatements } from '../app/engine/oracle.js';
 import { newMoonAtOrBefore, newMoonAfter, elongation, mansionWindow, mansionIndex, moonSidereal, MANSION_SPAN } from '../app/engine/lunar.js';
 import { shukuyo, MANSIONS } from '../app/engine/shukuyo.js';
 import { honmei, getsumei, kyusei, STARS } from '../app/engine/kyusei.js';
-import { moonCrossing, ayanamsa } from '../app/engine/swe.js';
+import { moonCrossing, ayanamsa, houseCusps, obliquity } from '../app/engine/swe.js';
+import { western, SIGNS } from '../app/engine/western.js';
+import { lifePath } from '../app/engine/numerology.js';
+import { comparablePairs, STRUCTURAL } from '../app/engine/agreement.js';
+import { AGREEMENT_RATES, AGREEMENT_SAMPLES, AGREEMENT_COUNTED_ON } from '../app/engine/agreementRates.js';
+import { allSystems } from '../app/engine/systems.js';
 import { PLACES, findPlaces } from '../app/engine/places.js';
 import { speak } from '../app/engine/voice.js';
 import { judgeStrength, judgeBoth } from '../app/engine/strength.js';
@@ -1732,6 +1737,176 @@ const DAY_PILLARS = [
     badElement.length === 0 && STARS.slice(1).length === 9
       && STARS.slice(1).every((s) => s.plain),
     `9星すべてに五行と説明がある（${STARS.slice(1).map((s) => s.element).join(',')}）`);
+}
+
+// --- 西洋の三点 --------------------------------------------------------------
+{
+  // The ascendant is computed by the library from (jd, latitude, longitude).
+  // Passing the two coordinates in the wrong order produces a perfectly
+  // plausible ascendant about two signs away, with no error and nothing on
+  // screen to suggest anything is wrong — measured at Iwamizawa: 300.6° the
+  // right way round, 243.8° the wrong way. So the angle is recomputed here from
+  // the ARMC by the classical closed form, which uses the latitude explicitly.
+  const D = Math.PI / 180;
+  const independent = (armc, lat, eps) => {
+    const value = Math.atan2(
+      Math.cos(armc * D),
+      -(Math.sin(armc * D) * Math.cos(eps * D) + Math.tan(lat * D) * Math.sin(eps * D)),
+    ) / D;
+    return ((value % 360) + 360) % 360;
+  };
+  const rnd = sampler(31337);
+  let worst = 0;
+  for (let i = 0; i < 300; i += 1) {
+    const lat = 20 + rnd(0, 4500) / 100;
+    const lon = 122 + rnd(0, 3200) / 100;
+    const jd = julianDay(rnd(1800, 2399), rnd(1, 12), rnd(1, 28), rnd(0, 23) + rnd(0, 59) / 60);
+    const h = houseCusps(jd, lat, lon, 'P');
+    const diff = Math.abs(((independent(h.ascmc[2], lat, obliquity(jd)) - h.ascmc[0] + 540) % 360) - 180);
+    worst = Math.max(worst, diff);
+  }
+  record('西洋', 'アセンダントが ARMC からの独立式と一致する（緯度と経度の取り違えを捕まえる）',
+    worst < 1e-6,
+    `300命式、最大差 ${worst.toExponential(2)}°。引数を入れ替えると岩見沢で 300.6°→243.8°（2星座ぶん）ずれる`);
+
+  // The refusal, which is the point of the module. No time, no ascendant; no
+  // latitude, no ascendant. Not a default and not a noon value.
+  const jd = julianDay(1990, 6, 15, 3.5);
+  const noTime = western(jd, { latitude: 43.196, longitude: 141.763, minutes: null });
+  const noLat = western(jd, { latitude: null, longitude: 141.763, minutes: 5 });
+  const full = western(jd, { latitude: 43.196, longitude: 141.763, minutes: 5 });
+  record('西洋', '時刻が無ければアセンダントを出さない（緯度が無くても出さない）',
+    noTime.ascendant === null && noTime.ascendantMissing
+      && noLat.ascendant === null && noLat.ascendantMissing
+      && full.ascendant !== null,
+    '時刻なし・緯度なしのどちらでも null を返し、理由を持つ。既定値で埋めない');
+
+  // The error bar has to partition the window exactly, like uncertainty.js.
+  let worstSum = 0;
+  let sunDet = 0;
+  const N = 400;
+  for (let i = 0; i < N; i += 1) {
+    const w = western(
+      julianDay(rnd(1900, 2050), rnd(1, 12), rnd(1, 28), rnd(0, 23) + rnd(0, 59) / 60),
+      { latitude: 24 + rnd(0, 2100) / 100, longitude: 122 + rnd(0, 3200) / 100, minutes: 30 },
+    );
+    for (const point of [w.sun, w.moon, w.ascendant]) {
+      worstSum = Math.max(worstSum, Math.abs(point.spread.reduce((a, b) => a + b.fraction, 0) - 1));
+    }
+    if (w.sun.state === 'determinate') sunDet += 1;
+  }
+  record('西洋', '三点それぞれの誤差棒が窓をちょうど分割する',
+    worstSum < 1e-9,
+    `${N}命式×3点、分割の合計が1からずれた最大 ${worstSum.toExponential(2)}。太陽が確定 ${(sunDet / N * 100).toFixed(1)}%`);
+
+  record('西洋', '十二星座が揃い、五行と混ざらない語彙を持つ',
+    SIGNS.length === 12 && SIGNS.every((s) => s.element.startsWith('west:') && s.plain),
+    '12星座すべてが west: 接頭辞つきの四元素を持つ。命式の五行と取り違えると一致せずに落ちる');
+}
+
+// --- 数秘術 -----------------------------------------------------------------
+{
+  // Reduction is the whole calculation, so it is checked as arithmetic: any
+  // number must land on a single digit or on a master number, and never on
+  // anything else.
+  const rnd = sampler(606);
+  const seen = new Set();
+  let bad = 0;
+  for (let i = 0; i < 3000; i += 1) {
+    const lp = lifePath({ year: rnd(1800, 2399), month: rnd(1, 12), day: rnd(1, 28) });
+    seen.add(lp.number);
+    if (!((lp.number >= 1 && lp.number <= 9) || [11, 22, 33].includes(lp.number))) bad += 1;
+    if (!lp.plain) bad += 1;
+  }
+  record('数秘術', 'ライフパスが1〜9か 11・22・33 に必ず畳まれる',
+    bad === 0,
+    `3,000件、範囲外 ${bad}件。出た値 ${[...seen].sort((a, b) => a - b).join('/')}`);
+
+  // Master numbers must survive; if the loop reduced them this would collapse
+  // to 2, 4 and 6 and nobody would notice from the output alone.
+  record('数秘術', 'マスターナンバーが畳まれずに残る',
+    lifePath({ year: 1975, month: 11, day: 29 }).number === 11
+      || [...seen].some((n) => n >= 11),
+    `標本に ${[...seen].filter((n) => n >= 11).join('/') || 'なし'} が出ている`);
+
+  // The honesty claim in the header: about one person in nine. Stated in the
+  // module, so it is measured rather than assumed.
+  const counts = new Map();
+  for (let i = 0; i < 9000; i += 1) {
+    const n = lifePath({ year: rnd(1930, 2030), month: rnd(1, 12), day: rnd(1, 28) }).number;
+    counts.set(n, (counts.get(n) || 0) + 1);
+  }
+  const biggest = Math.max(...counts.values()) / 9000;
+  record('数秘術', 'いちばん多い数でも「9人に1人」の桁にとどまる',
+    biggest < 0.2,
+    `最頻 ${(biggest * 100).toFixed(1)}%（宿曜の1宿は約3.7%、命式は桁が3つ違う）`);
+}
+
+// --- 一致度 -----------------------------------------------------------------
+//
+// The point of integrating systems at all, and the check that keeps it honest.
+{
+  const pairs = comparablePairs();
+
+  // Nothing may be compared across systems that do not share a question, and
+  // in particular the Western four elements must never meet the 五行. The
+  // prefix makes an accidental comparison fail to match; this makes it fail to
+  // be *built*.
+  const crossQuestion = pairs.filter((p) => p.a.question !== p.b.question);
+  const sameSystem = pairs.filter((p) => p.a.system === p.b.system);
+  record('一致度', '問いを共有しない投影どうしは比較されない',
+    crossQuestion.length === 0 && sameSystem.length === 0 && pairs.length > 0,
+    `${pairs.length}組。西洋の四元素は west: 接頭辞つきなので、五行と同じ問いに入らない`);
+
+  // Every comparable pair must have a measured chance rate, or the reading
+  // would state an agreement with no way to judge it — which is exactly the
+  // effect the whole file exists to prevent.
+  const missing = pairs.filter((p) => !Object.prototype.hasOwnProperty.call(AGREEMENT_RATES, p.key));
+  const rates = Object.values(AGREEMENT_RATES);
+  record('一致度', '比較しうる全ての組に実測の偶然一致率がある',
+    missing.length === 0
+      && rates.every((r) => r.observed >= 0 && r.observed <= 1 && r.independent > 0 && r.checked > 1000),
+    missing.length === 0
+      ? `${pairs.length}組すべてに実測値（標本 ${AGREEMENT_SAMPLES.toLocaleString('en-US')}件、${AGREEMENT_COUNTED_ON} 測定）`
+      : `頻度が無い組: ${missing.map((p) => p.key).join(', ')}`);
+
+  // The finding itself, asserted so that it cannot quietly stop being true.
+  // If a future projection genuinely beat chance, this check would fail and
+  // somebody would have to look at it — which is the correct outcome, because
+  // that would be the most interesting result this repository could produce.
+  const lifts = Object.entries(AGREEMENT_RATES)
+    .map(([key, r]) => [key, r.observed / r.independent]);
+  const extreme = lifts.filter(([, l]) => l < 0.6 || l > 1.5);
+  record('一致度', 'どの2系統も、偶然を超えて一致していない',
+    extreme.length === 0,
+    `倍率 ${Math.min(...lifts.map((l) => l[1])).toFixed(2)}〜${Math.max(...lifts.map((l) => l[1])).toFixed(2)}x`
+      + `（1.00xが偶然そのもの）。用神と本命星は ${(AGREEMENT_RATES['meishiki:needed|kyusei:year'].observed * 100).toFixed(1)}%`
+      + ` 対 無関係なら ${(AGREEMENT_RATES['meishiki:needed|kyusei:year'].independent * 100).toFixed(1)}%`);
+
+  // A tie is not a dominant element, and inventing one would feed the
+  // agreement layer a fact that came from an array's order.
+  const rnd = sampler(8888);
+  let tieLeaks = 0;
+  for (let i = 0; i < 300; i += 1) {
+    const facts = allSystems({
+      year: rnd(1930, 2030), month: rnd(1, 12), day: rnd(1, 28), hour: rnd(0, 23), minute: rnd(0, 59),
+      precision: 'pm5', longitude: 122 + rnd(0, 3200) / 100, latitude: 24 + rnd(0, 2100) / 100,
+    });
+    const largest = Math.max(...ELEMENTS.map((e) => facts.balance.counts[e]));
+    const tied = ELEMENTS.filter((e) => facts.balance.counts[e] === largest).length > 1;
+    if (tied && facts.balance.dominant !== null) tieLeaks += 1;
+  }
+  record('一致度', '最多五行が同数で並んだ盤は「最多」を主張しない',
+    tieLeaks === 0, `300命式、同数なのに1つを選んだ回数 ${tieLeaks}`);
+
+  // Flagged pairs must name real pairs; a typo would silently un-flag a
+  // non-independent comparison and let it read as corroboration.
+  const keys = new Set(pairs.map((p) => p.key));
+  const strays = Object.keys(STRUCTURAL).filter((k) => !keys.has(k));
+  record('一致度', '「独立でない」の印が実在する組を指している',
+    strays.length === 0,
+    strays.length === 0 ? `印は ${Object.keys(STRUCTURAL).length}件、すべて実在の組を指す`
+      : `存在しない組を指している: ${strays.join(', ')}`);
 }
 
 // --- 図と CSS の後始末 --------------------------------------------------------
