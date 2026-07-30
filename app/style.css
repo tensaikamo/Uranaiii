@@ -712,6 +712,16 @@ button.primary:active { background: rgba(201, 169, 97, 0.2); }
 .hero-badge.is-strong { color: var(--el-fire); border-color: rgba(226,87,75,0.5); }
 .hero-badge.is-neutral { color: var(--el-earth); border-color: rgba(217,164,65,0.5); }
 .hero-need { font-family: var(--mincho); font-size: 17px; color: var(--ink); }
+/* The one sentence a reader would repeat to somebody else. */
+.hero-line {
+  margin: 14px 0 0;
+  padding-top: 13px;
+  border-top: 1px solid var(--rule);
+  font-family: var(--mincho);
+  font-size: 15.5px;
+  line-height: 1.85;
+  color: #F2E9D6;
+}
 .hero-freq {
   margin: 12px 0 0;
   font-family: var(--mono);
@@ -929,7 +939,152 @@ tr.dominant td, tr.dominant th { color: var(--ink); }
 .output > *:nth-child(4) { animation-delay: 150ms; }
 .output > *:nth-child(n+5) { animation-delay: 190ms; }
 
+/* --- 目盛り: the chart as four positions ---------------------------------- */
+
+.gauge { margin: 0 0 20px; }
+.gauge:last-of-type { margin-bottom: 0; }
+
+.gauge-poles {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: var(--ink);
+}
+/* The poles must not wrap onto each other at 320px, so they shrink instead. */
+.gauge-pole { flex: 1 1 0; min-width: 0; font-family: var(--mincho); letter-spacing: 0.02em; }
+.gauge-pole.is-right { text-align: right; }
+.gauge-name {
+  flex: 0 0 auto;
+  font-size: 9.5px;
+  letter-spacing: 0.22em;
+  color: var(--brass);
+  opacity: 0.75;
+}
+
+.gauge-track {
+  position: relative;
+  height: 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: inset 0 0 0 1px var(--rule);
+  overflow: hidden;
+}
+.gauge-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 4px 0 0 4px;
+  background: linear-gradient(90deg, var(--brass-dim), var(--brass));
+}
+/* Leaning right: the fill starts at the right edge and grows inward, so the
+   colour always sits on the pole the reader is actually being told about. */
+.gauge-fill.is-right {
+  inset: 0 0 0 auto;
+  border-radius: 0 4px 4px 0;
+  background: linear-gradient(270deg, var(--brass-dim), var(--brass));
+}
+/* The split point itself, so it stays legible at 0% and at 100%. */
+.gauge-knob {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: #FBF2DE;
+  box-shadow: 0 0 0 1px rgba(10, 15, 24, 0.65);
+}
+/* 中庸: a zone, not a tick. Sits under the fill so the fill edge stays readable. */
+.gauge-band {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  /* Sits over the fill, so it stays legible on both the coloured and the empty
+     part of the track. Hatched rather than tinted for the same reason. */
+  background: repeating-linear-gradient(
+    135deg,
+    rgba(7, 12, 20, 0.42) 0 2px,
+    rgba(255, 255, 255, 0.14) 2px 4px);
+  border-left: 1px solid rgba(251, 242, 222, 0.55);
+  border-right: 1px solid rgba(251, 242, 222, 0.55);
+}
+/* The flattest a board of this size can be — a reference for "37.5%". */
+.gauge-mark {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 1px;
+  background: rgba(251, 242, 222, 0.5);
+}
+.gauge.is-strong .gauge-fill { background: linear-gradient(90deg, rgba(226,87,75,0.35), var(--el-fire)); }
+.gauge.is-weak .gauge-fill { background: linear-gradient(90deg, rgba(90,143,216,0.35), var(--el-water)); }
+.gauge.is-neutral .gauge-fill { background: linear-gradient(90deg, rgba(217,164,65,0.35), var(--el-earth)); }
+.gauge.is-strong .gauge-fill.is-right { background: linear-gradient(270deg, rgba(226,87,75,0.35), var(--el-fire)); }
+.gauge.is-weak .gauge-fill.is-right { background: linear-gradient(270deg, rgba(90,143,216,0.35), var(--el-water)); }
+.gauge.is-neutral .gauge-fill.is-right { background: linear-gradient(270deg, rgba(217,164,65,0.35), var(--el-earth)); }
+
+.gauge-foot {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 6px;
+  font-size: 11px;
+  line-height: 1.7;
+  color: var(--ink-dim);
+}
+.gauge-reading {
+  flex: 0 0 auto;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--brass);
+  white-space: nowrap;
+}
+.gauge-detail { flex: 1 1 auto; min-width: 0; }
+.gauge-note, .gauge-warn {
+  margin: 5px 0 0;
+  font-size: 10.5px;
+  line-height: 1.7;
+  color: var(--ink-faint);
+}
+.gauge-warn {
+  padding: 6px 9px;
+  border-left: 2px solid var(--el-fire);
+  background: rgba(226, 87, 75, 0.07);
+  color: var(--ink-dim);
+}
+
+/* --- 箇条書き: the part that gets scanned --------------------------------- */
+
+.bullets { margin: 0; padding: 0; list-style: none; }
+.bullet {
+  padding: 11px 0 10px;
+  border-top: 1px solid var(--rule);
+}
+.bullet:first-child { border-top: none; padding-top: 2px; }
+.bullet-text {
+  margin: 0;
+  font-family: var(--mincho);
+  font-size: 14.5px;
+  line-height: 1.85;
+  color: var(--ink);
+}
+/* A bullet's own sources sit tighter than a passage's. */
+.bullet .reading-source { margin-top: 6px; }
+.need-absent .voice-text { font-size: 14.5px; }
+
 /* --- motion -------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: no-preference) {
+  .gauge-fill { animation: gauge-grow 620ms cubic-bezier(.2,.8,.25,1) both; }
+}
+@keyframes gauge-grow {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+.gauge-fill { transform-origin: left center; }
+.gauge-fill.is-right { transform-origin: right center; }
 
 @media (prefers-reduced-motion: reduce) {
   .switch::after,
@@ -937,6 +1092,7 @@ tr.dominant td, tr.dominant th { color: var(--ink); }
   .hand { transition: none; }
   .glyph.is-leaving, .glyph.is-entering { animation: none; }
   .output > * { animation: none; }
+  .gauge-fill { animation: none; }
 }
 @media (prefers-reduced-motion: no-preference) {
   .hand { transition: transform 750ms cubic-bezier(.2,.8,.25,1); }

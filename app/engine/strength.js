@@ -148,6 +148,10 @@ export function judgeStrength(pillars, { useHidden = false } = {}) {
   const rootedIn = [];
   for (const [key, label] of [['year', '年'], ['month', '月'], ['day', '日'], ['hour', '時']]) {
     const p = pillars[key];
+    // A timeless record is three pillars, not four (spec §2.5), so the hour is
+    // absent rather than guessed. Every other loop in this file guards for it;
+    // this one did not, and threw on every chart entered without a birth time.
+    if (!p) continue;
     const roots = useHidden
       ? hiddenStems(p.branchChar).some((h) => h.element === me)
       : p.branchElement === me;
@@ -200,6 +204,12 @@ export function judgeStrength(pillars, { useHidden = false } = {}) {
     needed,
     avoided,
     rooted: rootedIn.length > 0,
+    // How many of the four branches hold the day master's element. `rooted` is
+    // only the yes/no of it; the count is a spread, and gauges.js needs the
+    // spread. Kept here rather than recounted downstream so 通根 has one
+    // definition — and so the 蔵干 setting cannot silently differ between the
+    // two places that ask the question.
+    rootCount: rootedIn.length,
     counts,
     useHidden,
     // How near the line the verdict sits. A chart at 1.5 is a different claim

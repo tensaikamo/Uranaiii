@@ -20,6 +20,8 @@ import { initEphemeris } from '../app/engine/swe.js';
 import { buildChart, DEFAULT_AXES } from '../app/engine/chart.js';
 import { rawStatements } from '../app/engine/reading.js';
 import { voiceStatements } from '../app/engine/voice.js';
+import { domainStatements } from '../app/engine/domains.js';
+import { judgeBoth } from '../app/engine/strength.js';
 import { julianDay } from '../app/engine/swe.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -57,9 +59,13 @@ for (let i = 0; i < SAMPLES; i += 1) {
   // that fires twice on one chart does not inflate its own frequency.
   // Both layers are measured into one table: the 語り page cites the same
   // frequencies, and it needs them most.
+  // The per-scene bullets are measured too. They are the lines a reader is most
+  // likely to feel spoken to by, so they are the ones that most need a number
+  // beside them saying how many other people got the same sentence.
   const seen = new Set([
     ...rawStatements(chart).map((s) => s.key),
     ...voiceStatements(chart, nowJdUt, input).map((s) => s.key),
+    ...domainStatements(chart, judgeBoth(chart.pillars)).map((s) => s.key),
   ]);
   for (const key of seen) counts.set(key, (counts.get(key) || 0) + 1);
 }

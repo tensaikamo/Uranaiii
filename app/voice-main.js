@@ -1,13 +1,17 @@
 /**
  * Wiring for the 語り page.
  *
- * Laid out the way a reading is delivered:
- *   名前 → 結論 → なぜ → どんな人か → 今年 → どうするか
+ * Laid out so the page can be *scanned* before it is read:
+ *   名前 → 命式 → 目盛り4本 → 強み・つまずき・今すぐ → 場面ごと → 時の流れ → 長文
  *
- * The name comes first because that is what a reader keeps. Everything below
- * hangs off the one verdict. The arithmetic behind the verdict is available but
- * folded away — there for anyone who wants to argue with it, out of the way of
- * everyone who does not.
+ * The earlier version was nine essays stacked vertically, and a reader had to
+ * finish them to find out what they had been told. Everything above the fold is
+ * now a bar or a one-line bullet; the essays are still here, in full, behind
+ * each section's もっと読む. Same conclusions, same sources — reachable in a
+ * glance instead of in five minutes.
+ *
+ * The arithmetic stays available too, folded, for anyone who wants to argue
+ * with it, and out of the way of everyone who does not.
  */
 
 import { initEphemeris, withinEphemeris, EPHEMERIS_YEARS, julianDay } from './engine/swe.js';
@@ -16,6 +20,9 @@ import { speak } from './engine/voice.js';
 import { peopleIn, ELEMENT_PLAIN } from './engine/plainwords.js';
 import { readName } from './engine/name.js';
 import { hiddenStems } from './engine/hidden.js';
+import { gauges, dayStemInDoubt } from './engine/gauges.js';
+import { resolveUncertainty } from './engine/uncertainty.js';
+import { domainBullets, needAbsentNote, summaryCards, DOMAINS } from './engine/domains.js';
 import { FIT_LABEL } from './engine/timeline.js';
 import { frequencyOf, RARITY_SAMPLES } from './engine/rarity.js';
 import { el } from './ui/render.js';
@@ -119,14 +126,120 @@ function citations(entry) {
   return cites;
 }
 
-/** One passage, rendered as its own titled card. */
-function passage(entry) {
+/**
+ * One passage, rendered as its own titled card.
+ *
+ * `fold` puts the prose behind a "もっと読む" disclosure instead of showing it
+ * outright. The bullets and the bar above a section are the part a reader
+ * actually scans; the paragraphs are for whoever wants them. Nothing is deleted
+ * by folding — it is one tap away.
+ */
+function passage(entry, { fold = false, bullets = null } = {}) {
   const section = el('section', 'section');
   section.append(el('h2', 'plain-h2', entry.title));
   if (entry.lead) section.append(el('p', 'voice-lead', entry.lead));
-  section.append(prose(entry.text));
-  section.append(citations(entry));
+  if (bullets) section.append(bulletList(bullets));
+
+  if (fold) {
+    const more = el('details', 'gloss');
+    more.append(el('summary', 'gloss-summary', 'もっと読む'));
+    more.append(prose(entry.text));
+    more.append(citations(entry));
+    section.append(more);
+  } else {
+    section.append(prose(entry.text));
+    section.append(citations(entry));
+  }
   return section;
+}
+
+/** Short lines, each with the characters it came from. */
+function bulletList(bullets) {
+  const list = el('ul', 'bullets');
+  for (const b of bullets) {
+    const item = el('li', 'bullet');
+    item.append(el('p', 'bullet-text', b.text));
+    item.append(citations(b));
+    list.append(item);
+  }
+  return list;
+}
+
+/**
+ * One gauge: two poles, and where this chart sits between them.
+ *
+ * `percent` is always distance toward the left pole (see gauges.js). The colour
+ * fills from whichever pole the chart leans toward, so the picture and the words
+ * under it never disagree. Marked up as a meter, so a screen reader gets the
+ * position rather than a decorative div.
+ */
+function gaugeRow(g) {
+  const row = el('div', `gauge${g.verdict ? ` is-${g.verdict}` : ''}`);
+
+  const poles = el('div', 'gauge-poles');
+  poles.append(el('span', 'gauge-pole', `${g.left} ${g.percent}%`));
+  poles.append(el('span', 'gauge-name', g.title));
+  poles.append(el('span', 'gauge-pole is-right',
+    `${Number((100 - g.percent).toFixed(1))}% ${g.right}`));
+  row.append(poles);
+
+  const track = el('div', 'gauge-track');
+  track.setAttribute('role', 'meter');
+  track.setAttribute('aria-valuemin', '0');
+  track.setAttribute('aria-valuemax', '100');
+  track.setAttribute('aria-valuenow', String(g.percent));
+  track.setAttribute('aria-label',
+    `${g.title}。${g.left} ${g.percent}パーセント、${g.right} ${Number((100 - g.percent).toFixed(1))}パーセント。${g.reading}`);
+
+  // Fill from whichever end the chart actually leans toward, not always from the
+  // left. Filling leftward for a 身弱 chart drew colour across 「力が余る」 while
+  // the label underneath said 削られる — the picture contradicted the words. And
+  // a gauge at 0% left an empty track, which reads as missing data rather than as
+  // "fully the right-hand pole".
+  const leansLeft = g.percent >= 50;
+  const fill = el('div', `gauge-fill${leansLeft ? '' : ' is-right'}`);
+  fill.style.width = `${leansLeft ? g.percent : 100 - g.percent}%`;
+  track.append(fill);
+
+  // Reference marks go on *top* of the fill. Drawn underneath, the fill covered
+  // them — and the 中庸 band is exactly the mark a reader needs when the fill has
+  // reached it.
+  //
+  // 中庸 is a zone rather than a line: a chart at 0.9 and one at 7 are different
+  // claims, and a single midpoint tick would hide that.
+  if (g.band) {
+    const band = el('div', 'gauge-band');
+    band.style.left = `${50 - g.band}%`;
+    band.style.width = `${g.band * 2}%`;
+    track.append(band);
+  }
+  // Where the bar would sit if the five elements were as level as this many
+  // characters allows — so "37.5%" can be read against something.
+  if (g.evenPercent) {
+    const mark = el('div', 'gauge-mark');
+    mark.style.left = `${g.evenPercent}%`;
+    track.append(mark);
+  }
+
+  // The exact position, so the split between the two poles stays visible even
+  // when the fill runs the whole width.
+  const knob = el('div', 'gauge-knob');
+  knob.style.left = `${g.percent}%`;
+  track.append(knob);
+  row.append(track);
+
+  const foot = el('div', 'gauge-foot');
+  foot.append(el('span', 'gauge-reading', g.reading));
+  foot.append(el('span', 'gauge-detail', g.detail));
+  row.append(foot);
+
+  if (g.unstable && g.unstableNote) row.append(el('p', 'gauge-warn', g.unstableNote));
+  if (g.provisional) {
+    row.append(el('p', 'gauge-warn',
+      '記録された時刻が日付の変わり目に近いので、この目盛りは日柱が動くと変わります。'));
+  }
+  if (g.note) row.append(el('p', 'gauge-note', g.note));
+  return row;
 }
 
 function render(input) {
@@ -151,6 +264,9 @@ function render(input) {
     `効くのは ${s.needed.map((e) => ({ wood: '木', fire: '火', earth: '土', metal: '金', water: '水' }[e])).join('と')}`));
   hero.append(row);
 
+  // The one sentence to leave with, before any of the arithmetic.
+  hero.append(el('p', 'hero-line', `一行で言うと——${v.verdict.lead}`));
+
   const share = peopleIn(frequencyOf(v.type.key));
   if (share) {
     hero.append(el('p', 'hero-freq',
@@ -168,6 +284,51 @@ function render(input) {
     strip.append(cell);
   }
   output.append(strip);
+
+  /* --- 4本の目盛り: the chart as four positions ------------------------- */
+  {
+    // The error bars decide whether the day-master gauges are provisional, so
+    // they have to be resolved before the gauges are drawn.
+    const uncertainty = resolveUncertainty(input, DEFAULT_AXES);
+    const section = el('section', 'section');
+    section.append(el('h2', 'plain-h2', 'あなたの目盛り'));
+    section.append(el('p', 'voice-lead',
+      '8文字を4つの尺度で測ったものです。真ん中に近いほど、どちらとも言えないという意味です。'));
+    for (const g of gauges(chart, s, { dayStemUncertain: dayStemInDoubt(uncertainty) })) {
+      section.append(gaugeRow(g));
+    }
+    output.append(section);
+  }
+
+  /* --- 強み / つまずき / 今すぐ ----------------------------------------- */
+  for (const card of summaryCards(chart, s)) {
+    if (card.bullets.length === 0) continue;
+    const section = el('section', 'section');
+    section.append(el('h2', 'plain-h2', `${card.mark} ${card.title}`));
+    section.append(bulletList(card.bullets));
+    output.append(section);
+  }
+
+  /* --- 場面ごと: 仕事 / 人づきあい / お金 / 心と体 ---------------------- */
+  {
+    const note = needAbsentNote(chart, s);
+    if (note) {
+      const lead = el('section', 'section');
+      lead.append(el('h2', 'plain-h2', '場面ごとに見ると'));
+      lead.append(prose(note.text, 'need-absent'));
+      lead.append(citations(note));
+      output.append(lead);
+    }
+    const scenes = domainBullets(chart, s);
+    for (const { key, label } of DOMAINS) {
+      const scene = scenes[key];
+      if (!scene || scene.bullets.length === 0) continue;
+      const section = el('section', 'section');
+      section.append(el('h2', 'plain-h2', label));
+      section.append(bulletList(scene.bullets));
+      output.append(section);
+    }
+  }
 
   /* --- 時の欄: today inside the year inside the decade ------------------- */
   {
@@ -189,7 +350,9 @@ function render(input) {
   }
 
   /* --- 結論 + なぜ --- */
-  const verdictSection = passage(v.verdict);
+  // The hero already carries the verdict and the one-line version, so the long
+  // form is depth rather than headline. The arithmetic fold stays as it was.
+  const verdictSection = passage(v.verdict, { fold: true });
   const why = el('details', 'gloss');
   why.append(el('summary', 'gloss-summary', 'なぜそう言えるの？（計算の中身）'));
   why.append(el('p', 'hint',
@@ -239,9 +402,12 @@ function render(input) {
   verdictSection.append(why);
   output.append(verdictSection);
 
-  /* --- the rest --- */
+  /* --- the long form, folded ------------------------------------------- */
+  // These four say at length what the bullets above say in one line each. They
+  // are kept in full — the register work in plainwords.js lives here — but they
+  // no longer stand between the reader and the scannable part of the page.
   for (const entry of [v.need, v.portrait, v.absence, v.year]) {
-    if (entry) output.append(passage(entry));
+    if (entry) output.append(passage(entry, { fold: true }));
   }
 
   /* --- 大運: the timeline ------------------------------------------------ */

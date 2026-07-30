@@ -19,6 +19,8 @@
 import { initEphemeris, EPHEMERIS_YEARS } from '../app/engine/swe.js';
 import { buildChart, DEFAULT_AXES } from '../app/engine/chart.js';
 import { readChart, readingSignature, RULES } from '../app/engine/reading.js';
+import { domainStatements } from '../app/engine/domains.js';
+import { judgeBoth } from '../app/engine/strength.js';
 
 const SAMPLES = Number(process.argv[2]) || 1000;
 
@@ -32,6 +34,9 @@ const rnd = (a, b) => {
 };
 
 const signatures = new Map();
+const bulletSignatures = new Map();
+const bulletHits = new Map();
+let bulletTotal = 0;
 let covered = 0;
 let statementTotal = 0;
 let unsourced = 0;
@@ -61,6 +66,18 @@ for (let i = 0; i < SAMPLES; i += 1) {
 
   const sig = readingSignature(statements);
   signatures.set(sig, (signatures.get(sig) || 0) + 1);
+
+  // The delivery layer is measured separately. These are the lines a reader
+  // actually reads first, so they are the ones most able to feel personal while
+  // being true of everybody — the exact failure this file exists to catch.
+  const bullets = domainStatements(chart, judgeBoth(chart.pillars));
+  bulletTotal += bullets.length;
+  for (const b of bullets) {
+    if (!Array.isArray(b.source) || b.source.length === 0) unsourced += 1;
+    bulletHits.set(b.key, (bulletHits.get(b.key) || 0) + 1);
+  }
+  const bulletSig = bullets.map((b) => b.source.join(',')).sort().join('|');
+  bulletSignatures.set(bulletSig, (bulletSignatures.get(bulletSig) || 0) + 1);
 }
 
 const coverage = covered / SAMPLES;
@@ -86,6 +103,23 @@ for (const [name, hits] of ruleHits) {
 
 const most = [...signatures.entries()].sort((a, b) => b[1] - a[1])[0];
 console.log(`\nmost common reading shared by ${most[1]} charts (${pct(most[1] / SAMPLES)})`);
+
+/* --- the delivery layer: bars and per-scene bullets ----------------------- */
+
+const bulletDistinct = bulletSignatures.size / SAMPLES;
+console.log(`\n--- 伝え方の層（目盛り・場面ごとの箇条書き） ---`);
+console.log(`弁別率 (discrimination)  ${pct(bulletDistinct)}   ${bulletSignatures.size} distinct source-combinations`);
+console.log(`bullets per chart        ${(bulletTotal / SAMPLES).toFixed(2)} average`);
+
+// Any single line true of most people is a Barnum line, whatever it feels like
+// to read. Listed so it can be split into something that discriminates — that is
+// how the 通根 yes/no became a count.
+const common = [...bulletHits.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
+console.log('\nmost common single bullets:');
+for (const [key, hits] of common) {
+  const flag = hits / SAMPLES >= 0.7 ? '  <- Barnum risk' : '';
+  console.log(`  ${pct(hits / SAMPLES).padStart(7)}  ${key}${flag}`);
+}
 
 if (unsourced > 0) {
   console.error('\nFAILED: an unsourced statement escaped readChart.');

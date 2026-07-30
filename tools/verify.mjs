@@ -22,6 +22,8 @@ import { luckDirection, luckPeriods, luckOnset, ageNow, ageExact, cycleAtAge } f
 import { hiddenStems, hiddenTable, TRIADS, NO_MIDDLE } from '../app/engine/hidden.js';
 import { timeline } from '../app/engine/timeline.js';
 import { judgeStrength, judgeBoth } from '../app/engine/strength.js';
+import { gauges, dayStemInDoubt, SCORE_SCALE } from '../app/engine/gauges.js';
+import { domainBullets, summaryCards, domainStatements, DOMAINS, MAX_PER_DOMAIN, ROOTED_AT } from '../app/engine/domains.js';
 import { frequencyOf } from '../app/engine/rarity.js';
 import { trueTermPeriod, meanTermPeriod, degreesSinceRisshun, termPeriod, termIngresses, SETSU } from '../app/engine/terms.js';
 import { computePillars, TIGER_MONTH_STEM, RAT_HOUR_STEM, DAY_PILLAR_OFFSET, pillarFromIndex, STEMS, BRANCHES, STEM_ELEMENT } from '../app/engine/pillars.js';
@@ -861,6 +863,134 @@ const DAY_PILLARS = [
     Math.floor(ageExact(input, new Date('2026-07-29T12:00:00+09:00')))
       === ageNow(input, new Date('2026-07-29T12:00:00+09:00')),
     `${ageExact(input, new Date('2026-07-29T12:00:00+09:00')).toFixed(2)} → ${ageNow(input, new Date('2026-07-29T12:00:00+09:00'))}歳`);
+}
+
+// --- 目盛りと場面ごとの箇条書き（伝え方の層） -------------------------------
+//
+// This layer restates computed facts; it must never introduce one. The checks
+// below are about that boundary: ranges stay in range, the strength gauge cannot
+// disagree with the verdict it is drawn from, and no bullet ever reaches a
+// reader without the characters it came from.
+{
+  let seed = 4242;
+  const rnd = (a, b) => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return a + (seed % (b - a + 1)); };
+  const SAMPLES = 2000;
+
+  let outOfRange = 0;
+  let verdictMismatch = 0;
+  let unstableMissed = 0;
+  let unsourcedGauge = 0;
+  let unsourcedBullet = 0;
+  let emptySection = 0;
+  let overCap = 0;
+  let badRootCount = 0;
+  let cardsEmpty = 0;
+  const seenKeys = new Set();
+
+  for (let i = 0; i < SAMPLES; i += 1) {
+    const input = {
+      year: rnd(1930, 2030), month: rnd(1, 12), day: rnd(1, 28),
+      hour: rnd(0, 23), minute: rnd(0, 59),
+      // One chart in ten has no recorded time, so the three-pillar path is swept
+      // too. judgeStrength threw on exactly this input before it was guarded.
+      precision: rnd(0, 9) === 0 ? 'unknown' : 'pm5',
+      longitude: 122 + rnd(0, 3200) / 100,
+      sex: rnd(0, 1) === 0 ? 'male' : 'female',
+    };
+    const chart = buildChart(input, DEFAULT_AXES);
+    const strength = judgeBoth(chart.pillars);
+
+    const branches = ['year', 'month', 'day', 'hour'].filter((k) => chart.pillars[k]).length;
+    if (!Number.isInteger(strength.rootCount) || strength.rootCount < 0
+      || strength.rootCount > branches
+      || strength.rooted !== (strength.rootCount > 0)) badRootCount += 1;
+
+    for (const g of gauges(chart, strength)) {
+      if (!Number.isFinite(g.percent) || g.percent < 0 || g.percent > 100) outOfRange += 1;
+      if (!g.source || g.source.length === 0) unsourcedGauge += 1;
+      if (g.verdict) {
+        // percent is distance toward the left pole, and the left pole is 力が余る.
+        // 身強 must therefore sit right of centre, 身弱 left of it.
+        const side = g.percent > 50 ? 'strong' : g.percent < 50 ? 'weak' : 'neutral';
+        const consistent = g.verdict === 'neutral'
+          ? Math.abs(g.percent - 50) <= g.band
+          : side === g.verdict;
+        if (!consistent) verdictMismatch += 1;
+        if (!strength.agrees && !(g.unstable && g.unstableNote)) unstableMissed += 1;
+      }
+    }
+
+    const scenes = domainBullets(chart, strength);
+    for (const { key } of DOMAINS) {
+      const bullets = scenes[key].bullets;
+      if (bullets.length === 0) emptySection += 1;
+      if (bullets.length > MAX_PER_DOMAIN) overCap += 1;
+    }
+    for (const st of domainStatements(chart, strength)) {
+      if (!st.text || !st.key || !st.source || st.source.length === 0) unsourcedBullet += 1;
+      seenKeys.add(st.key);
+    }
+    if (summaryCards(chart, strength).some((c) => c.bullets.length === 0)) cardsEmpty += 1;
+  }
+
+  record('伝え方', '目盛りは4本すべて 0〜100 に収まる',
+    outOfRange === 0, `${SAMPLES}命式 × 4本、範囲外 ${outOfRange} 件（±${SCORE_SCALE} でクランプ）`);
+
+  record('伝え方', '力の目盛りは身強身弱の判定と必ず同じ側を指す',
+    verdictMismatch === 0, `食い違い ${verdictMismatch} 件`);
+
+  record('伝え方', '蔵干で判定が割れる命式では目盛りに警告が出る',
+    unstableMissed === 0, `警告漏れ ${unstableMissed} 件`);
+
+  record('伝え方', '目盛りと箇条書きは出典なしでは生成されない',
+    unsourcedGauge === 0 && unsourcedBullet === 0,
+    `出典なしの目盛り ${unsourcedGauge} 件、箇条書き ${unsourcedBullet} 件`);
+
+  record('伝え方', '4場面はどれも空にならず、上限を超えない',
+    emptySection === 0 && overCap === 0 && cardsEmpty === 0,
+    `空の場面 ${emptySection} 件、${MAX_PER_DOMAIN}件超過 ${overCap} 件、空のカード ${cardsEmpty} 件`);
+
+  // A regression, kept by name because it was a live crash: the 通根 loop in
+  // judgeStrength read pillars.hour without guarding for it, so every reader who
+  // left the birth time blank got "読めませんでした" instead of a reading — on
+  // both pages, since reading.js judges through the same function.
+  {
+    const timeless = { year: 1990, month: 6, day: 15, hour: 12, minute: 0, precision: 'unknown', longitude: 139.7, sex: 'male' };
+    const c = buildChart(timeless, DEFAULT_AXES);
+    let ok = false;
+    let detail = '';
+    try {
+      const st = judgeBoth(c.pillars);
+      const bullets = domainStatements(c, st).length;
+      const bars = gauges(c, st).length;
+      ok = c.pillars.hour === null && bars === 4 && bullets > 0;
+      detail = `${c.signature} → ${st.label}、目盛り${bars}本、箇条書き${bullets}件`;
+    } catch (error) {
+      detail = `例外: ${error.message}`;
+    }
+    record('伝え方', '時刻不明の三柱でも判定と箇条書きが出る（例外を投げない）', ok, detail);
+  }
+
+  record('伝え方', 'rootCount は地支の本数を超えず rooted と矛盾しない',
+    badRootCount === 0, `矛盾 ${badRootCount} 件（土台ありの境目は ${ROOTED_AT} 本）`);
+
+  // Every bullet cites a frequency, so every key has to exist in the table the
+  // generator wrote. A missing one silently drops the "◯人に1人" chip, which is
+  // how the honest-statistics claim would quietly stop being true.
+  const missingFreq = [...seenKeys].filter((k) => frequencyOf(k) === null);
+  record('伝え方', '全ての箇条書きキーが頻度表に載っている',
+    missingFreq.length === 0,
+    `${seenKeys.size} 種のキーのうち、頻度が無いもの ${missingFreq.length} 件`
+    + `${missingFreq.length ? `: ${missingFreq.slice(0, 4).join(', ')}` : ''}`);
+
+  // 決定論: the same birth must always produce the same page. A rotation or a
+  // random pick would read as variety and destroy the frequency claims.
+  const fixed = { year: 1990, month: 6, day: 15, hour: 6, minute: 30, precision: 'pm5', longitude: 141.77, sex: 'male' };
+  const once = buildChart(fixed, DEFAULT_AXES);
+  const twice = buildChart(fixed, DEFAULT_AXES);
+  const keysOf = (c) => domainStatements(c, judgeBoth(c.pillars)).map((b) => b.key).join('|');
+  record('伝え方', '同じ生年月日は毎回同じ箇条書きを出す',
+    keysOf(once) === keysOf(twice), `${domainStatements(once, judgeBoth(once.pillars)).length} 件が一致`);
 }
 
 // --- report -----------------------------------------------------------------
