@@ -91,8 +91,15 @@ export const STEM_PLAIN = {
 export const SEASON_PLAIN = { 春: '春', 夏: '夏', 秋: '秋', 冬: '冬' };
 
 /** Natural frequency, said the way a person would say it. */
-export function peopleIn(frequency) {
-  if (frequency === null || frequency <= 0) return null;
+export function peopleIn(frequency, samples = null) {
+  // A key the sample never produced used to render as *nothing* — the chip
+  // simply vanished, and the one line that was rarest lost the only number that
+  // said so. "Not once in 20,000" is not missing data; it is the strongest
+  // rarity statement the table can make, and it belongs on the page.
+  if (frequency === null) {
+    return samples ? `${samples.toLocaleString('ja-JP')}人の標本には出ませんでした` : null;
+  }
+  if (frequency <= 0) return samples ? `${samples.toLocaleString('ja-JP')}人の標本には出ませんでした` : null;
   if (frequency >= 0.995) return 'ほぼ全員に当てはまります';
   const oneIn = Math.round(1 / frequency);
   if (oneIn <= 1) return 'ほぼ全員に当てはまります';

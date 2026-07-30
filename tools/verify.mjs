@@ -15,11 +15,13 @@ import { initEphemeris, ephemerisVersion, sunLongitude, equationOfTime, sunCross
 import { buildChart, buildChartAtOffset, DEFAULT_AXES } from '../app/engine/chart.js';
 import { resolveUncertainty } from '../app/engine/uncertainty.js';
 import { readChart, readingSignature, summarise } from '../app/engine/reading.js';
+import { peopleIn } from '../app/engine/plainwords.js';
 import { voiceStatements } from '../app/engine/voice.js';
 import { strokesOf } from '../app/engine/strokes.js';
 import { fiveGrids, elementOfCount, readName } from '../app/engine/name.js';
 import { luckDirection, luckPeriods, luckOnset, ageNow, ageExact, cycleAtAge } from '../app/engine/luck.js';
 import { hiddenStems, hiddenTable, TRIADS, NO_MIDDLE } from '../app/engine/hidden.js';
+import { tenGod, tenGodOf, chartTenGods, godGroups, GOD_GROUP, TEN_GOD_PLAIN, GROUP_PLAIN } from '../app/engine/tenGods.js';
 import { timeline, summariseTimeline } from '../app/engine/timeline.js';
 import { speak } from '../app/engine/voice.js';
 import { judgeStrength, judgeBoth } from '../app/engine/strength.js';
@@ -582,8 +584,17 @@ const DAY_PILLARS = [
     unsourced === 0, `${unsourced} unsourced passages across ${samples} charts`);
   record('語り (別ページ)', 'every cited character is actually on the board',
     fabricated === 0, `${fabricated} citations naming a character not in the chart`);
-  record('語り (別ページ)', 'every passage carries a measured frequency',
-    unmeasured === 0, `${unmeasured} passages missing from the rarity table`);
+  // Not "every key has a number" — a key rarer than the sample can resolve
+  // legitimately has none, and chasing the tail with sample size is a race that
+  // cannot be won. What matters is that an unmeasured key still *says something*:
+  // peopleIn renders it as 「20,000人の標本には出ませんでした」, which is the
+  // strongest rarity claim the table can make, rather than dropping the chip and
+  // leaving the rarest line on the page as the only one with no number.
+  const unmeasuredShare = unmeasured / Math.max(1, samples);
+  record('語り (別ページ)', '頻度が測れない文にも、測れなかったことが表示される',
+    unmeasuredShare < 0.02 && peopleIn(null, 20000) !== null && peopleIn(null) === null,
+    `${samples}命式中 ${unmeasured}文が標本外（${(unmeasuredShare * 100).toFixed(1)}%、上限2%）。`
+    + `未測定は「${peopleIn(null, 20000)}」と出す`);
   record('語り (別ページ)', 'passages discriminate between charts',
     signatures.size / samples > 0.3,
     `${signatures.size}/${samples} distinct passage sets = ${((signatures.size / samples) * 100).toFixed(1)}%`);
@@ -1155,6 +1166,103 @@ const DAY_PILLARS = [
       readFileSync(join(ROOT, f), 'utf8').includes('japanNow'));
     record('伝え方', '未来の生年月日を弾く仕掛けが両ページにある', guards && capped,
       '両ページが japanNow() で max を今日に切り下げ、送信時にも検査する');
+  }
+}
+
+// --- 通変星 -----------------------------------------------------------------
+//
+// Checked by structure rather than against a copied table. A table transcribed
+// from a book verifies only that the transcription matches; these laws follow
+// from what 通変星 *is*, so a wrong entry cannot satisfy them by luck.
+{
+  const YANG = (i) => i % 2 === 0;
+
+  // 1. Every day master sees all ten, exactly once each. If the derivation
+  //    collapsed two cases together this fails immediately.
+  let bijection = true;
+  for (let d = 0; d < 10; d += 1) {
+    const seen = new Set();
+    for (let o = 0; o < 10; o += 1) seen.add(tenGod(d, o));
+    if (seen.size !== 10) bijection = false;
+  }
+  record('通変星', '十干それぞれから見て、十神が過不足なく1つずつ対応する',
+    bijection, '10日主 × 10干 = 100通り、どの日主からも10種が1回ずつ');
+
+  // 2. 比肩 is the day master itself and nothing else.
+  let selfOnly = true;
+  for (let d = 0; d < 10; d += 1) {
+    for (let o = 0; o < 10; o += 1) {
+      if ((tenGod(d, o) === '比肩') !== (d === o)) selfOnly = false;
+    }
+  }
+  record('通変星', '比肩は日主と同じ干のときだけ立つ', selfOnly,
+    '100通りすべてで 比肩 ⇔ 同じ干');
+
+  // 3. 陰陽 splits the ten into the two fixed halves. 偏 and 正 are exactly the
+  //    same-polarity and different-polarity sides of their pairs.
+  const SAME = new Set(['比肩', '食神', '偏財', '偏官', '偏印']);
+  let polarity = true;
+  for (let d = 0; d < 10; d += 1) {
+    for (let o = 0; o < 10; o += 1) {
+      if (SAME.has(tenGod(d, o)) !== (YANG(d) === YANG(o))) polarity = false;
+    }
+  }
+  record('通変星', '陰陽の同異が「偏」と「正」の側をそのまま決める', polarity,
+    '比肩・食神・偏財・偏官・偏印 が同じ陰陽、残り5つが違う陰陽');
+
+  // 4. Duality. Reading the relation from the other end must land on its
+  //    partner: if B is 正官 to A then A is 正財 to B, because 剋我 seen from the
+  //    other side *is* 我剋. This is the check that would catch a 生/剋 direction
+  //    reversed anywhere in the derivation.
+  const DUAL = {
+    比肩: '比肩', 劫財: '劫財',
+    正官: '正財', 偏官: '偏財',
+    正財: '正官', 偏財: '偏官',
+    印綬: '傷官', 偏印: '食神',
+    傷官: '印綬', 食神: '偏印',
+  };
+  const broken = [];
+  for (let a = 0; a < 10; a += 1) {
+    for (let b = 0; b < 10; b += 1) {
+      if (DUAL[tenGod(a, b)] !== tenGod(b, a)) broken.push(`${STEMS[a]}→${STEMS[b]}`);
+    }
+  }
+  record('通変星', '逆から見た関係が必ず対になる（正官⇔正財、印綬⇔傷官…）',
+    broken.length === 0,
+    broken.length === 0 ? '100通りすべてで対応が閉じている' : `破れ ${broken.length}件: ${broken.slice(0, 4).join(', ')}`);
+
+  // 5. One published row, as an anchor. The structure above could in principle
+  //    be satisfied by a consistently mislabelled set, so the 甲 row — the one
+  //    every text prints — is compared character by character.
+  const KOU_ROW = ['比肩', '劫財', '食神', '傷官', '偏財', '正財', '偏官', '正官', '偏印', '印綬'];
+  const got = STEMS.map((c) => tenGodOf('甲', c));
+  record('通変星', '甲の行が published の並びと一致する',
+    got.join('') === KOU_ROW.join(''),
+    `甲: ${STEMS.map((c, i) => `${c}${got[i]}`).join(' ')}`);
+
+  // 6. Every name the derivation can produce has plain wording and a group.
+  const names = new Set();
+  for (let d = 0; d < 10; d += 1) for (let o = 0; o < 10; o += 1) names.add(tenGod(d, o));
+  const missingWords = [...names].filter((n) => !TEN_GOD_PLAIN[n] || !TEN_GOD_PLAIN[n].body);
+  const missingGroup = [...names].filter((n) => !GOD_GROUP[n] || !GROUP_PLAIN[GOD_GROUP[n]]);
+  record('通変星', '十神すべてに平易な語りと所属グループがある',
+    missingWords.length === 0 && missingGroup.length === 0 && names.size === 10,
+    `${names.size}種、語り欠け ${missingWords.length}、グループ欠け ${missingGroup.length}`);
+
+  // 7. On a real chart: one label per position, the day stem excluded, and the
+  //    three-pillar case does not throw.
+  {
+    const four = buildChart({ year: 1990, month: 6, day: 15, hour: 6, minute: 30, precision: 'pm5', longitude: 141.77 }, DEFAULT_AXES);
+    const three = buildChart({ year: 1990, month: 6, day: 15, hour: 12, minute: 0, precision: 'unknown', longitude: 141.77 }, DEFAULT_AXES);
+    const a = chartTenGods(four.pillars);
+    const b = chartTenGods(three.pillars);
+    const noDayStem = !a.some((e) => e.position === '日干');
+    const groups = godGroups(four.pillars);
+    const total = Object.values(groups).reduce((n, g) => n + g.length, 0);
+    record('通変星', '命式に載せると位置ごとに1つずつ付く（日干は除く・三柱でも落ちない）',
+      a.length === 7 && b.length === 5 && noDayStem && total === a.length,
+      `四柱 ${a.length}箇所 / 三柱 ${b.length}箇所、グループ合計 ${total}: `
+      + a.map((e) => `${e.position}${e.god}`).join(' '));
   }
 }
 

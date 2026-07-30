@@ -16,6 +16,8 @@
  *   最多五行 what the board holds most of        → how money behaves
  *   判定     身強 / 中庸 / 身弱                  → the frame the setting sits in
  *   通根     how many branches hold the day master → whether staying put pays
+ *   通変星   財 / 官 / 印 / 比劫 groups          → does the board hold what this
+ *                                                  section is actually about
  *
  * The first version of this file looked at only four of these, and it showed:
  * measured over 20,000 charts it could produce just **978 distinct bullet-sets**
@@ -40,6 +42,7 @@
 
 import { ELEMENTS, elementBalance } from './pillars.js';
 import { ELEMENT_PLAIN, STEM_PLAIN, VERDICT_PLAIN } from './plainwords.js';
+import { godGroups, GROUP_PLAIN } from './tenGods.js';
 
 /** The four settings, in the order they are shown. */
 export const DOMAINS = [
@@ -222,6 +225,59 @@ const LUCK_NOW = {
   },
 };
 
+/**
+ * 通変星 — the group each setting is actually *about*.
+ *
+ * This is the point of having 通変星 at all. 財 is money; 官 is position and
+ * being held to account; 印 is support and learning; 比劫 is people on your own
+ * level. So each scene can ask the one question that belongs to it — does this
+ * chart hold the thing this section is about, and how much of it? — instead of
+ * routing everything through 五行.
+ *
+ * Three states, because that is what the count honestly supports: none at all,
+ * present, or concentrated. A chart with four 官 is a different life from one
+ * with none, and both are common enough to be worth saying.
+ */
+const DOMAIN_GROUP = { work: 'office', people: 'peer', money: 'wealth', body: 'resource' };
+
+const GROUP_STATE = {
+  work: {
+    none: '盤に「官」——立場や役割を与えるもの——が一つもありません。'
+      + '肩書きで動くより、実力が直接見える場のほうが向きます。',
+    some: '盤に「官」があります。役割や責任が向こうから来る形なので、'
+      + '引き受ける量さえ決めておけば、そのまま立場になります。',
+    many: '盤に「官」が多めです。責任が集まりやすく、頼まれごとが増えます。'
+      + '断る基準を先に決めておかないと、自分の時間が残りません。',
+  },
+  people: {
+    none: '盤に「比劫」——対等な相手——が一つもありません。'
+      + '群れずに動けるぶん、味方は意識して作りにいく必要があります。',
+    some: '盤に「比劫」があります。横に並べる相手が要るタイプで、'
+      + '上下のはっきりした関係より、対等な関係で力が出ます。',
+    many: '盤に「比劫」が多めです。人との距離が近く、助け合いも取り合いも起きます。'
+      + '誰と組むかで結果がいちばん変わる人です。',
+  },
+  money: {
+    none: '盤に「財」——扱うお金やものを表す星——が一つもありません。'
+      + '自分で掴みにいくより、入ってくる仕組みを作るほうが合っています。',
+    some: '盤に「財」があります。手に取って扱えるものが向いていて、'
+      + '数字で見える形にすると管理しやすくなります。',
+    many: '盤に「財」が多めです。扱えるものが多いぶん、'
+      + '手を広げすぎると一つひとつが薄くなります。',
+  },
+  body: {
+    none: '盤に「印」——支えや学びを表す星——が一つもありません。'
+      + '守られるより、自分で回復の手順を持っておくほうが確実です。',
+    some: '盤に「印」があります。教わる・頼る・休むが効くタイプなので、'
+      + 'そこを削ると立て直しに時間がかかります。',
+    many: '盤に「印」が多めです。支えは厚いですが、'
+      + '受け取るばかりだと自分から動く力が鈍ります。',
+  },
+};
+
+/** Concentrated at two of the eight positions — a third of the board on one subject. */
+const GROUP_MANY = 3;
+
 const GENERATES = { wood: 'fire', fire: 'earth', earth: 'metal', metal: 'water', water: 'wood' };
 const CONTROLS = { wood: 'earth', earth: 'water', water: 'fire', fire: 'metal', metal: 'wood' };
 
@@ -267,6 +323,15 @@ const ROOT_STRENGTH = [
   '土台が厚いので、一度積んだものは環境が変わっても崩れません。',
 ];
 
+/** 強み — whichever 通変星 group the board holds most of. */
+const GROUP_STRENGTH = {
+  peer: '横に並べる相手がいる盤です。対等な関係のなかでいちばん力が出ます。',
+  output: '外に出す力が厚い盤です。作る・話す・見せる、どれでも形になります。',
+  wealth: '扱えるものが多い盤です。手に取って動かす仕事に強みが出ます。',
+  office: '責任を任される盤です。立場がつくほど、実力が見えるようになります。',
+  resource: '支えと学びが厚い盤です。教わったことを自分のものにするのが速いタイプです。',
+};
+
 /** A bullet, or nothing if it would carry no sources (spec §8.2). */
 function bullet(text, source, key) {
   if (!text || !source || source.length === 0) return null;
@@ -287,6 +352,7 @@ function bullet(text, source, key) {
  */
 export function domainBullets(chart, strength, { luckFit = null } = {}) {
   const { counts } = elementBalance(chart.pillars);
+  const groups = godGroups(chart.pillars);
   const me = chart.pillars.day.stemElement;
   const dominant = ELEMENTS.filter((e) => counts[e] === Math.max(...ELEMENTS.map((x) => counts[x])));
   // 用神 can name more than one element; ELEMENTS order makes the pick stable.
@@ -332,9 +398,20 @@ export function domainBullets(chart, strength, { luckFit = null } = {}) {
       }
     }
 
+    // 通変星 — does the board hold the thing this section is about?
+    const group = DOMAIN_GROUP[domain];
+    const held = groups[group];
+    const state = held.length === 0 ? 'none' : held.length >= GROUP_MANY ? 'many' : 'some';
+    const godBullet = bullet(GROUP_STATE[domain][state],
+      held.length === 0
+        ? [`no_god:${GROUP_PLAIN[group].name}`, `domain:${domain}`]
+        : held.map((e) => e.source).concat(`god:${GROUP_PLAIN[group].name}`, `domain:${domain}`),
+      `domain:${domain}:god:${state}`);
+
     const candidates = [
       needBullet,
       palaceBullet,
+      godBullet,
       ...missing.map((e) => bullet(MISSING[e][domain],
         [`absent:${ELEMENT_PLAIN[e].name}`, `domain:${domain}`], `domain:${domain}:absent:${e}`)),
       luckFit ? bullet(LUCK_NOW[luckFit][domain],
@@ -387,8 +464,19 @@ export function summaryCards(chart, strength) {
   const missing = ELEMENTS.filter((e) => counts[e] === 0);
   const plain = VERDICT_PLAIN[strength.verdict];
 
+  // Whichever 通変星 group the board holds most of. Ties resolve by the fixed
+  // order of GROUP_PLAIN, so the same birth always names the same one.
+  const groups = godGroups(chart.pillars);
+  const ranked = Object.keys(GROUP_PLAIN)
+    .filter((g) => groups[g].length > 0)
+    .sort((a, b) => groups[b].length - groups[a].length);
+  const lead = ranked[0] || null;
+
   const strengths = [
     bullet(stem.tag, [`day_stem:${day.stemChar}`, `image:${stem.image}`], `card:strength:stem:${day.stemChar}`),
+    lead ? bullet(GROUP_STRENGTH[lead],
+      groups[lead].map((e) => e.source).concat(`god:${GROUP_PLAIN[lead].name}`),
+      `card:strength:god:${lead}`) : null,
     bullet({
       strong: '放っておいても形が出ます。出しすぎだけが問題になります。',
       weak: '削られる側に立っているぶん、置かれる場所を選ぶ目が育ちます。',

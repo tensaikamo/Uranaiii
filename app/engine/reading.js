@@ -35,6 +35,7 @@
 import { ELEMENTS, ELEMENT_NAMES, elementBalance } from './pillars.js';
 import { frequencyOf } from './rarity.js';
 import { judgeBoth } from './strength.js';
+import { chartTenGods, TEN_GOD_PLAIN, GOD_GROUP, GROUP_PLAIN } from './tenGods.js';
 
 /** 相生 — each element generates the next. */
 const GENERATES = { wood: 'fire', fire: 'earth', earth: 'metal', metal: 'water', water: 'wood' };
@@ -65,6 +66,9 @@ export const GLOSSARY = [
   ['月令', '生まれた月が示す季節。8字の中でいちばん強く効く。'],
   ['相生', '木→火→土→金→水→木 の順で、前が後を生む（助ける）関係。'],
   ['相剋', '木→土→水→火→金→木 の順で、前が後を抑える関係。'],
+  ['通変星', '日主から見た他の字の呼び名。五行の関係（同じ・生む・生まれる・抑える・抑えられる）と、'
+    + '陰陽が同じか違うかの掛け合わせで、10種類に決まる。財＝お金、官＝立場、印＝支えと学び、'
+    + '食傷＝外に出すもの、比劫＝対等な相手。'],
   ['干合', '決まった5組（甲己・乙庚・丙辛・丁壬・戊癸）が隣り合うこと。'],
   ['冲', '正反対の6組（子午・丑未・寅申・卯酉・辰戌・巳亥）が同じ盤にあること。'],
 ];
@@ -248,11 +252,72 @@ function ruleAbsent(chart) {
   })];
 }
 
+/**
+ * 通変星 — each character named by its relation to the day master.
+ *
+ * The board page states what is there and cites it; it does not tell the reader
+ * what kind of person that makes them. So this reports the labels and their
+ * ordinary subjects, and stops. The 語り page is where they turn into advice.
+ *
+ * Reported as the board's tally rather than one statement per character: seven
+ * lines saying "the year stem is 劫財" would bury every other rule under a list.
+ */
+function ruleTenGods({ pillars }) {
+  const gods = chartTenGods(pillars);
+  if (gods.length === 0) return [];
+
+  const counts = new Map();
+  for (const g of gods) counts.set(g.god, (counts.get(g.god) || 0) + 1);
+  const ranked = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'ja'));
+  const n = ranked[0][1];
+  // Two stars on two positions each is a tie, and calling one of them "the most"
+  // would be picking a winner the board did not pick. All of them are named.
+  const top = ranked.filter(([, count]) => count === n).map(([god]) => god);
+  const subjects = [...new Set(top.map((g) => GROUP_PLAIN[GOD_GROUP[g]]))]
+    .map((g) => `${g.name}——${g.subject}`).join('、');
+
+  const listed = gods.map((g) => `${g.position}${g.char}=${g.god}`).join('、');
+
+  // The key has to identify the *claim*, not the chart, or its measured
+  // frequency stops meaning anything. Keying by the full list of tied stars made
+  // one key per chart: those keys measured ~0.00% each, and the reading would
+  // have printed "10,000人に1人" beside a line true of a great many people.
+  //
+  // So the three shapes the tally can take each get their own claim and key:
+  //   nothing repeats          → the board does not lean
+  //   one or two stars lead    → name them
+  //   three or more tie        → the board does not lean, again, but denser
+  let text;
+  let key;
+  if (n === 1) {
+    text = `日主 ${pillars.day.stemChar} から見ると、${listed}。同じ星の重なりは無い。`;
+    key = 'tenGods:none';
+  } else if (top.length >= 3) {
+    text = `日主 ${pillars.day.stemChar} から見ると、${listed}。`
+      + `${n}つ並ぶ星が${top.length}種あり、突出した一つは無い。`;
+    key = `tenGods:even:${n}`;
+  } else {
+    text = `日主 ${pillars.day.stemChar} から見ると、${listed}。`
+      + `いちばん多いのは${top.join('と')}で${n}つ${top.length > 1 ? 'ずつ' : ''}（${subjects}）。`;
+    key = `tenGods:${top.join('')}:${n}`;
+  }
+
+  return [say({
+    text,
+    source: [`day_stem:${pillars.day.stemChar}`]
+      .concat(gods.map((g) => g.source))
+      .concat(top.length >= 3 ? ['god:even'] : top.map((g) => `god:${g}`)),
+    group: 'relation',
+    key,
+  })];
+}
+
 export const RULES = [
   ruleVerdict,
   ruleDayMaster,
   ruleMonthCommand,
   ruleNeighbourStems,
+  ruleTenGods,
   ruleStemUnion,
   ruleBranchClash,
   ruleDominant,

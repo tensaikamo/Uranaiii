@@ -792,6 +792,8 @@ button.primary:active { background: rgba(201, 169, 97, 0.2); }
 }
 .voice-text:last-child { margin-bottom: 0; }
 .cite.is-freq { color: var(--brass); border-color: var(--brass-faint); }
+/* Rarer than the sample could measure — the strongest rarity claim available. */
+.cite.is-freq.is-unseen { color: var(--el-earth); border-color: rgba(217,164,65,0.4); }
 
 .colophon a { color: var(--brass); }
 .diverge { color: var(--el-earth); }

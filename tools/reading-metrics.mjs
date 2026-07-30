@@ -65,7 +65,9 @@ for (let i = 0; i < SAMPLES; i += 1) {
     day: rnd(1, 28),
     hour: rnd(0, 23),
     minute: rnd(0, 59),
-    precision: 'pm5',
+    // Same 1-in-10 timeless share as build-rarity, so the two agree on what
+    // input space is being measured.
+    precision: rnd(0, 9) === 0 ? 'unknown' : 'pm5',
     longitude: 122 + rnd(0, 3200) / 100,
   };
   const chart = buildChart(input, DEFAULT_AXES);

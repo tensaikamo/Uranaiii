@@ -23,6 +23,7 @@ import { hiddenStems } from './engine/hidden.js';
 import { gauges, dayStemInDoubt } from './engine/gauges.js';
 import { resolveUncertainty } from './engine/uncertainty.js';
 import { domainBullets, needAbsentNote, summaryCards, DOMAINS } from './engine/domains.js';
+import { chartTenGods, TEN_GOD_PLAIN } from './engine/tenGods.js';
 import { FIT_LABEL } from './engine/timeline.js';
 import { frequencyOf, RARITY_SAMPLES } from './engine/rarity.js';
 import { el } from './ui/render.js';
@@ -143,8 +144,9 @@ function prose(text, className) {
 
 function citations(entry) {
   const cites = el('p', 'reading-source');
-  const share = peopleIn(frequencyOf(entry.key));
-  if (share) cites.append(el('span', 'cite is-freq', share));
+  const freq = frequencyOf(entry.key);
+  const share = peopleIn(freq, RARITY_SAMPLES);
+  if (share) cites.append(el('span', `cite is-freq${freq === null ? ' is-unseen' : ''}`, share));
   if (entry.term) cites.append(el('span', 'cite is-term', entry.term));
   for (const src of entry.source) cites.append(el('span', 'cite', src));
   return cites;
@@ -291,7 +293,7 @@ function render(input) {
   // The one sentence to leave with, before any of the arithmetic.
   hero.append(el('p', 'hero-line', `一行で言うと——${v.verdict.lead}`));
 
-  const share = peopleIn(frequencyOf(v.type.key));
+  const share = peopleIn(frequencyOf(v.type.key), RARITY_SAMPLES);
   if (share) {
     hero.append(el('p', 'hero-freq',
       `このタイプは ${share}（${RARITY_SAMPLES.toLocaleString('ja-JP')}人ぶんを実際に数えた結果。全40タイプ）`));
@@ -417,6 +419,27 @@ function render(input) {
     'それぞれの支の中に隠れている干（蔵干）は、こうです。'
     + '本気がいちばん強く、中気、余気の順に弱くなります。'));
   why.append(zk);
+
+  // 通変星 — the name each character carries when read from the day master.
+  // Placed inside the same fold as the arithmetic: it is what the scene sections
+  // above are built on, and a reader who wants to check them needs to see it.
+  {
+    const tg = el('table');
+    const tgBody = el('tbody');
+    for (const g of chartTenGods(chart.pillars)) {
+      const tr = el('tr');
+      tr.append(el('th', null, `${g.position} ${g.char}`));
+      tr.append(el('td', null, g.god));
+      tr.append(el('td', null, TEN_GOD_PLAIN[g.god].image));
+      tgBody.append(tr);
+    }
+    tg.append(tgBody);
+    why.append(el('p', 'hint',
+      `本体の${chart.pillars.day.stemChar}から見ると、残りの字はそれぞれこう呼ばれます（通変星）。`
+      + '五行の関係と、陰陽が同じか違うかだけで決まります。'
+      + '上の「仕事」「お金」などは、この呼び名を使って書いています。'));
+    why.append(tg);
+  }
 
   why.append(el('p', 'hint',
     (s.margin < 1

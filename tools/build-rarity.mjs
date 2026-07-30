@@ -70,7 +70,13 @@ const counts = new Map();
 for (let i = 0; i < SAMPLES; i += 1) {
   const input = {
     year: rnd(1930, 2030), month: rnd(1, 12), day: rnd(1, 28),
-    hour: rnd(0, 23), minute: rnd(0, 59), precision: 'pm5',
+    hour: rnd(0, 23), minute: rnd(0, 59),
+    // One in ten has no recorded birth time. The app accepts a timeless record
+    // as three pillars (§2.5), and the sample has to cover the input space the
+    // app accepts: keys that only occur on a three-pillar chart were otherwise
+    // absent from this table, which silently drops their "◯人に1人" chip — the
+    // one number the reading offers as a check against feeling spoken to.
+    precision: rnd(0, 9) === 0 ? 'unknown' : 'pm5',
     longitude: 122 + rnd(0, 3200) / 100,
     sex: rnd(0, 1) === 0 ? 'male' : 'female',
   };
