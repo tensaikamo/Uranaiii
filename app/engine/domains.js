@@ -309,7 +309,7 @@ const ROOT = {
 /**
  * How many branches must hold the day master's element before "土台がある".
  *
- * Two, measured: it splits charts 61% / 39%. One branch out of four is a thin
+ * Two, measured: it splits charts 62% / 38%. One branch out of four is a thin
  * root, and the advice on that side — move rather than stay — is the right one
  * for it.
  */
@@ -359,8 +359,8 @@ export function domainBullets(chart, strength, { luckFit = null } = {}) {
   const need = strength.needed[0];
   // 通根 as a yes/no is 90% "yes", which makes a statement built on it true of
   // nearly everybody — a Barnum line, and the frequency table caught it. The
-  // count is a real spread (0本 10%, 1本 29%, 2本 31%, 3本 22%, 4本 8% over
-  // 20,000 charts), so the split is drawn at two branches: 61% / 39%.
+  // count is a real spread (0本 10%, 1本 28%, 2本 33%, 3本 21%, 4本 8% over
+  // 20,000 charts), so the split is drawn at two branches: 62% / 38%.
   const rootKey = strength.rootCount >= ROOTED_AT ? 'rooted' : 'rootless';
 
   // The element the chart needs is very often one it does not have — that is
@@ -483,7 +483,7 @@ export function summaryCards(chart, strength) {
       neutral: 'どちらにも大きく振れないので、どんな相手とも組めます。',
     }[strength.verdict], [`judgement:${plain.term}`], `card:strength:verdict:${strength.verdict}`),
     // Graded by how many branches hold it, not by whether any does: the yes/no
-    // version was true of 89.7% of charts and read as flattery.
+    // version was true of 90.1% of charts and read as flattery.
     bullet(ROOT_STRENGTH[Math.min(strength.rootCount, 3)],
       [`root_count:${strength.rootCount}`],
       `card:strength:roots:${Math.min(strength.rootCount, 3)}`),

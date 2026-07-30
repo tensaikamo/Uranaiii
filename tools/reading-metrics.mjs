@@ -31,6 +31,7 @@ import { readChart, readingSignature, RULES } from '../app/engine/reading.js';
 import { domainStatements } from '../app/engine/domains.js';
 import { judgeBoth } from '../app/engine/strength.js';
 import { luckPeriods, cycleAtAge, ageExact } from '../app/engine/luck.js';
+import { sampler } from './random.mjs';
 
 const SAMPLES = Number(process.argv[2]) || 1000;
 // Pinned so the 大運 material is measured against a stated day, like rarity.js.
@@ -39,11 +40,7 @@ const NOW = new Date('2026-07-30T03:00:00Z');
 await initEphemeris();
 
 // Deterministic, so the number is reproducible between runs.
-let seed = 8103;
-const rnd = (a, b) => {
-  seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-  return a + (seed % (b - a + 1));
-};
+const rnd = sampler(8103);
 
 const signatures = new Map();
 // The ceiling: no reading layer can distinguish more cases than there are

@@ -8,6 +8,7 @@
 
 import { readFileSync, readdirSync, writeFileSync, statSync, existsSync } from 'node:fs';
 import { cacheList, cacheVersion } from './build-sw.mjs';
+import { sampler, mulberry32 } from './random.mjs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -35,7 +36,7 @@ import { speak } from '../app/engine/voice.js';
 import { judgeStrength, judgeBoth } from '../app/engine/strength.js';
 import { gauges, dayStemInDoubt, SCORE_SCALE } from '../app/engine/gauges.js';
 import { domainBullets, summaryCards, domainStatements, DOMAINS, MAX_PER_DOMAIN, ROOTED_AT } from '../app/engine/domains.js';
-import { frequencyOf } from '../app/engine/rarity.js';
+import { frequencyOf, RARITY } from '../app/engine/rarity.js';
 import { trueTermPeriod, meanTermPeriod, degreesSinceRisshun, termPeriod, termIngresses, SETSU } from '../app/engine/terms.js';
 import { computePillars, TIGER_MONTH_STEM, RAT_HOUR_STEM, DAY_PILLAR_OFFSET, pillarFromIndex, STEMS, BRANCHES, STEM_ELEMENT, ELEMENTS } from '../app/engine/pillars.js';
 import { japanOffsetHours, japanNow } from '../app/engine/time.js';
@@ -439,11 +440,7 @@ const DAY_PILLARS = [
 // what "the board is computed without compromise" reduces to mechanically: if
 // any of them can be broken by some date, the chart is not trustworthy.
 {
-  let seed = 20240204;
-  const rnd = (a, b) => {
-    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-    return a + (seed % (b - a + 1));
-  };
+  const rnd = sampler(20240204);
   const precisions = ['pm1', 'pm5', 'pm30', 'unknown'];
   const broken = { threw: 0, month: 0, hour: 0, period: 0, fraction: 0 };
   const samples = 400;
@@ -524,11 +521,7 @@ const DAY_PILLARS = [
 // that no unsourced statement escapes, and that every cited character is
 // actually on the board, so a rule cannot cite something it invented.
 {
-  let seed = 4451;
-  const rnd = (a, b) => {
-    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-    return a + (seed % (b - a + 1));
-  };
+  const rnd = sampler(4451);
 
   let unsourced = 0;
   let fabricated = 0;
@@ -583,11 +576,7 @@ const DAY_PILLARS = [
 // frequency is the reader's only defence against a passage that feels uncanny
 // merely by being common.
 {
-  let seed = 77123;
-  const rnd = (a, b) => {
-    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-    return a + (seed % (b - a + 1));
-  };
+  const rnd = sampler(77123);
   const nowJd = julianDay(2026, 7, 29, 12);
   let unsourced = 0;
   let fabricated = 0;
@@ -926,8 +915,7 @@ const DAY_PILLARS = [
 // disagree with the verdict it is drawn from, and no bullet ever reaches a
 // reader without the characters it came from.
 {
-  let seed = 4242;
-  const rnd = (a, b) => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return a + (seed % (b - a + 1)); };
+  const rnd = sampler(4242);
   const SAMPLES = 2000;
 
   let outOfRange = 0;
@@ -1052,8 +1040,7 @@ const DAY_PILLARS = [
   {
     const combos = new Set();
     const charts = new Set();
-    let s2 = 24601;
-    const r2 = (a, b) => { s2 = (s2 * 1103515245 + 12345) & 0x7fffffff; return a + (s2 % (b - a + 1)); };
+    const r2 = sampler(24601);
     const at = new Date('2026-07-30T03:00:00Z');
     for (let i = 0; i < 4000; i += 1) {
       const input = {
@@ -1406,6 +1393,86 @@ const DAY_PILLARS = [
     `sw.js=${declaredVersion} / いまのディスク=${cacheVersion(expected)}`);
 }
 
+// --- 標本 -------------------------------------------------------------------
+//
+// Every measured claim in this repository — the rarity table, the Barnum
+// screen, the discrimination ceiling, and most of the sweeps below — is drawn
+// from one sampler. So the sampler is checked before anything that uses it.
+//
+// This is here because the previous one was broken, not as a precaution. It was
+// the C-textbook LCG, whose multiply overflows 2^53 in JavaScript, so the low
+// bits it kept were rounding noise: six of the twelve months never came up, and
+// 20,000 draws produced 161 distinct (month, day, hour) triples. Every "◯人に1人"
+// the app has ever shown was measured on a sample with no spring and no autumn.
+{
+  const rnd = sampler(20260729);
+  const months = new Array(13).fill(0);
+  const triples = new Set();
+  const N = 20000;
+  for (let i = 0; i < N; i += 1) {
+    const m = rnd(1, 12);
+    const d = rnd(1, 28);
+    const h = rnd(0, 23);
+    months[m] += 1;
+    triples.add(`${m}/${d}/${h}`);
+  }
+  const counts = months.slice(1);
+  const expected = N / 12;
+  const sigma = Math.sqrt(N * (1 / 12) * (11 / 12));
+  const strays = counts.filter((c) => Math.abs(c - expected) > 4 * sigma).length;
+  record('標本', '標本抽出器が範囲全体に届く（12ヶ月すべてが出る）',
+    counts.every((c) => c > 0) && strays === 0,
+    `${N}回、各月 ${Math.min(...counts)}〜${Math.max(...counts)}（期待 ${expected}）、4σ超 ${strays}件`);
+
+  // Against the theory, not against a number picked by eye. Drawing N times
+  // from M equally likely values leaves M(1 - (1-1/M)^N) distinct ones, so the
+  // expected count is computed here and the measurement has to land on it.
+  // Checking "more than 8,000 of 8,064" instead — the first thing I wrote —
+  // demands something the mathematics forbids, and would have failed a correct
+  // generator forever. A threshold has to come from somewhere.
+  const possible = 12 * 28 * 24;
+  const expectedDistinct = possible * (1 - (1 - 1 / possible) ** N);
+  const off = Math.abs(triples.size - expectedDistinct) / expectedDistinct;
+  record('標本', '標本が少数の値に潰れていない',
+    off < 0.02,
+    `(月,日,時)の組 ${triples.size.toLocaleString('en-US')}種／理論値 ${expectedDistinct.toFixed(0)}種`
+      + `（可能な組は ${possible.toLocaleString('en-US')}、ずれ ${(off * 100).toFixed(1)}%）。壊れていた頃は161種`);
+
+  // Same seed, same sequence. A rarity table nobody can reproduce is not
+  // evidence, and reproducibility is a property of the generator, not a hope.
+  const a = mulberry32(12345);
+  const b = mulberry32(12345);
+  let identical = true;
+  for (let i = 0; i < 1000; i += 1) if (a() !== b()) identical = false;
+  const c = mulberry32(12346);
+  record('標本', '同じ種は同じ列を、違う種は違う列を出す',
+    identical && mulberry32(12345)() !== c(),
+    '同じ種で1,000回一致、種を1つ変えると別の列');
+}
+
+// --- 反バーナム -------------------------------------------------------------
+//
+// The 70% rule had no gate behind it. `reading-metrics.mjs` printed
+// "<- Barnum risk" beside any line true of most people, and whether that
+// mattered depended on somebody reading the output — which is how the 通根 line
+// survived at 89.7% until it was looked for by hand.
+//
+// It is a gate now. It could not honestly have been one before this round: the
+// frequencies it would have judged were measured with the broken sampler, so a
+// line could have passed by being rare only in a sample with no spring in it.
+{
+  const LIMIT = 0.7;
+  const over = Object.entries(RARITY)
+    .filter(([, freq]) => freq >= LIMIT)
+    .sort((a, b) => b[1] - a[1]);
+  const highest = Object.entries(RARITY).sort((a, b) => b[1] - a[1])[0];
+  record('反バーナム', 'ほとんど全員に当たる文が一つも無い（70%未満）',
+    over.length === 0,
+    over.length === 0
+      ? `${Object.keys(RARITY).length}文の最頻は ${(highest[1] * 100).toFixed(1)}%（${highest[0]}）`
+      : `70%以上: ${over.slice(0, 5).map(([k, v]) => `${k} ${(v * 100).toFixed(1)}%`).join(', ')}`);
+}
+
 // --- 朔と月 -----------------------------------------------------------------
 //
 // The lunar substrate everything Moon-based sits on. Checked against an
@@ -1551,8 +1618,7 @@ const DAY_PILLARS = [
   let containsBirth = 0;
   let edgeCorrect = 0;
   const samples = 300;
-  let s = 424242;
-  const rnd = (a, b) => { s = (s * 1103515245 + 12345) & 0x7fffffff; return a + s % (b - a + 1); };
+  const rnd = sampler(424242);
   for (let i = 0; i < samples; i += 1) {
     const jd = julianDay(rnd(1800, 2399), rnd(1, 12), rnd(1, 28), rnd(0, 23) + rnd(0, 59) / 60);
     const w = mansionWindow(jd);
@@ -1739,8 +1805,7 @@ const DAY_PILLARS = [
   // The oracle drops the hedging. It does not drop the sourcing — that is the
   // whole distinction between "a register" and "made up", and it is the one
   // thing on that page worth checking mechanically.
-  let seed = 8823;
-  const rnd = (a, b) => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return a + (seed % (b - a + 1)); };
+  const rnd = sampler(8823);
   let unsourced = 0;
   let empty = 0;
   const keys = new Set();

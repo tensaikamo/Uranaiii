@@ -16,8 +16,8 @@
  * differently so the two never get confused.
  *
  * Two of the four gauges move depending on whether 蔵干 are counted. Measured
- * over 20,000 charts, gauge 2 changes side for 15.1% of them and gauge 4 for
- * 28.4%. So they say so, on the chart where it happens, rather than presenting
+ * over 20,000 charts, gauge 2 changes side for 13.8% of them and gauge 4 for
+ * 28.7%. So they say so, on the chart where it happens, rather than presenting
  * one school's answer as the answer — the same treatment §2.5 gives time.
  */
 

@@ -17,6 +17,8 @@ import { writeFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { sampler } from './random.mjs';
+
 import { initEphemeris } from '../app/engine/swe.js';
 import { buildChart, DEFAULT_AXES } from '../app/engine/chart.js';
 import { rawStatements } from '../app/engine/reading.js';
@@ -53,11 +55,7 @@ const nowJdUt = julianDay(
 );
 const COUNTED_ON = new Date(now.getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10);
 
-let seed = 20260729;
-const rnd = (a, b) => {
-  seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-  return a + (seed % (b - a + 1));
-};
+const rnd = sampler(20260729);
 
 /** The 大運 the reader stands in today — one of the per-scene bullet's materials. */
 function luckNow(chart, strength, input) {
