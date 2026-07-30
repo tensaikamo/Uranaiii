@@ -52,7 +52,19 @@ export function buildBoardFigure(chart, { showGods = true } = {}) {
     if (!pillar) {
       // A timeless record is three pillars. The column stays, empty and named,
       // rather than closing up — the absence is a fact about the record.
-      column.append(el('div', 'board-empty', '—'));
+      //
+      // Built from the same five slots as a full column, with the stem and
+      // branch cells empty. The first version collapsed it to three elements;
+      // the heights happened to match so nothing looked wrong, but the column
+      // was a different shape from its neighbours, and any rule about the grid
+      // stopped holding for exactly the input the app documents as supported.
+      for (const role of ['stem', 'branch']) {
+        const cell = el('div', `board-cell is-${role} is-absent`);
+        cell.append(el('span', 'board-glyph', role === 'stem' ? '—' : ''));
+        cell.append(el('span', 'board-god', ''));
+        column.append(cell);
+      }
+      column.append(el('div', 'board-hidden'));
       column.append(el('div', 'board-governs', '時刻の記録なし'));
       grid.append(column);
       continue;

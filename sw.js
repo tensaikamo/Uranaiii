@@ -12,7 +12,7 @@
  * changing with them — the version is a hash of their contents.
  */
 
-const VERSION = 'daae8cb2aeec';
+const VERSION = 'a6258f8474a0';
 const CACHE = `meishiki-${VERSION}`;
 
 const FILES = [

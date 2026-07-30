@@ -24,6 +24,7 @@ import { luckDirection, luckPeriods, luckOnset, ageNow, ageExact, cycleAtAge } f
 import { hiddenStems, hiddenTable, TRIADS, NO_MIDDLE } from '../app/engine/hidden.js';
 import { tenGod, tenGodOf, chartTenGods, godGroups, GOD_GROUP, TEN_GOD_PLAIN, GROUP_PLAIN } from '../app/engine/tenGods.js';
 import { timeline, summariseTimeline } from '../app/engine/timeline.js';
+import { annualYears } from '../app/ui/luckband.js';
 import { speak } from '../app/engine/voice.js';
 import { judgeStrength, judgeBoth } from '../app/engine/strength.js';
 import { gauges, dayStemInDoubt, SCORE_SCALE } from '../app/engine/gauges.js';
@@ -1364,6 +1365,70 @@ const DAY_PILLARS = [
   record('オフライン', 'キャッシュ版が中身のハッシュと一致している（再生成漏れの検出）',
     declaredVersion === cacheVersion(expected),
     `sw.js=${declaredVersion} / いまのディスク=${cacheVersion(expected)}`);
+}
+
+// --- 図と CSS の後始末 --------------------------------------------------------
+//
+// Each of these is a defect that shipped. Named individually so a regression
+// says which one came back.
+{
+  // A2 — a figure that replaces another leaves its styles behind, and they go on
+  // being served to every reader. Swapping the 命式 string for the board figure
+  // and taking the element hue off the band bars orphaned nine rules; nothing
+  // noticed until they were looked for by hand.
+  const css = readFileSync(join(ROOT, 'app/style.css'), 'utf8');
+  const source = ['app/main.js', 'app/voice-main.js']
+    .concat(readdirSync(join(ROOT, 'app/engine')).map((f) => `app/engine/${f}`))
+    .concat(readdirSync(join(ROOT, 'app/ui')).map((f) => `app/ui/${f}`))
+    .filter((f) => f.endsWith('.js'))
+    .map((f) => readFileSync(join(ROOT, f), 'utf8'))
+    .join('\n')
+    + readFileSync(join(ROOT, 'index.html'), 'utf8')
+    + readFileSync(join(ROOT, 'voice.html'), 'utf8');
+
+  // Class names the stylesheet defines, minus the ones that exist only to be
+  // composed by CSS itself (state modifiers are applied via template strings the
+  // scan below cannot follow, so they are matched on their stem instead).
+  const declared = new Set();
+  for (const m of css.matchAll(/\.([a-z][a-z0-9-]{2,})/g)) declared.add(m[1]);
+  const STATE = /^(is-|el-|bg-)/;
+  // Class names are often assembled — `hand-${which}`, `board-cell is-${role}` —
+  // and a plain substring scan cannot see the halves. Every prefix that appears
+  // immediately before an interpolation is collected and treated as a wildcard,
+  // so `hand-standard` counts as used because `hand-${` exists. Without this the
+  // check reports live classes as dead, which would train everyone to ignore it.
+  const built = [...source.matchAll(/([a-z][a-z0-9-]*-)\$\{/g)].map((m) => m[1]);
+  const orphans = [...declared].filter((cls) => {
+    if (STATE.test(cls)) return false;
+    if (source.includes(cls)) return false;
+    return !built.some((prefix) => cls.startsWith(prefix));
+  });
+  record('後始末', 'CSS に、どこからも使われていないクラスが無い',
+    orphans.length === 0,
+    orphans.length === 0
+      ? `${declared.size} クラスすべてが app/ か HTML から参照されている`
+      : `未参照 ${orphans.length}件: ${orphans.slice(0, 6).join(', ')}`);
+
+  // A4 — the years before the first 大運 were missing from the band, which left
+  // a reader younger than their own 立運 with no position on it at all. They are
+  // drawn now, and they must stay free of polarity: with no 大運 running there is
+  // no wind to claim.
+  {
+    const input = { year: 1990, month: 6, day: 15, hour: 6, minute: 30, precision: 'pm5', longitude: 141.77, sex: 'male' };
+    const chart = buildChart(input, DEFAULT_AXES);
+    const strength = judgeBoth(chart.pillars);
+    const luck = luckPeriods(chart, strength, 'male');
+    const rows = annualYears(luck, strength, chart.pillars.solarYear);
+    const before = rows.filter((r) => r.fit === 'before');
+    const onset = Math.floor(luck.onset.years + luck.onset.months / 12);
+    const startsAtBirth = rows[0].age === 0;
+    const noClaim = before.every((r) => r.period === null && r.fit === 'before');
+    const contiguous = rows.every((r, i) => i === 0 || r.age === rows[i - 1].age + 1);
+    record('図', '帯が誕生から始まり、大運前の区間は追い風も向かい風も主張しない',
+      startsAtBirth && before.length === onset && noClaim && contiguous,
+      `立運 ${luck.onset.years}歳${luck.onset.months}ヶ月 → 大運前 ${before.length}年、`
+      + `帯は ${rows[0].age}歳から ${rows[rows.length - 1].age}歳まで連続`);
+  }
 }
 
 // --- report -----------------------------------------------------------------

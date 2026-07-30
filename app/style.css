@@ -737,18 +737,6 @@ button.primary:active { background: rgba(201, 169, 97, 0.2); }
   line-height: 1.6;
 }
 
-.voice-strip {
-  display: flex;
-  justify-content: space-around;
-  padding: 14px 8px;
-  margin-top: 20px;
-  border-top: 1px solid var(--rule-strong);
-  border-bottom: 1px solid var(--rule-strong);
-}
-.voice-cell { display: flex; flex-direction: column; align-items: center; gap: 4px; }
-.voice-cell-label { font-size: 9.5px; letter-spacing: 0.2em; color: var(--brass); opacity: 0.75; }
-.voice-cell-text { font-family: var(--mincho); font-size: 21px; letter-spacing: 0.06em; }
-
 /* Plain headings: readable size, not a whispered 10px label. */
 .plain-h2 {
   font-family: var(--mincho);
@@ -774,15 +762,6 @@ button.primary:active { background: rgba(201, 169, 97, 0.2); }
 .voice-strong { color: #FBF2DE; font-weight: 400; border-bottom: 1px solid var(--brass-dim); }
 .cite.is-term { color: var(--ink-dim); border-color: var(--rule-strong); }
 
-.voice-item { margin-bottom: 20px; }
-.voice-item.is-lead .voice-text { font-size: 16px; }
-.voice-title {
-  margin: 0 0 8px;
-  font-family: var(--mincho);
-  font-size: 20px;
-  letter-spacing: 0.12em;
-  color: #F2E9D6;
-}
 .voice-text {
   margin: 0 0 14px;
   font-family: var(--mincho);
@@ -964,12 +943,6 @@ tr.dominant td, tr.dominant th { color: var(--ink); }
  *   3. Text wears text tokens. The one exception is a glyph that *is* the datum.
  */
 
-.el-bg-wood  { fill: var(--el-wood); }
-.el-bg-fire  { fill: var(--el-fire); }
-.el-bg-earth { fill: var(--el-earth); }
-.el-bg-metal { fill: var(--el-metal); }
-.el-bg-water { fill: var(--el-water); }
-
 /* --- 命式の図 --- */
 
 .board-fig { margin: 20px 0 0; }
@@ -1018,12 +991,8 @@ tr.dominant td, tr.dominant th { color: var(--ink); }
 }
 .board-hid { font-family: var(--mincho); font-size: 12px; color: var(--ink-faint); }
 .board-hid.is-main { color: var(--ink); }
-.board-empty {
-  font-family: var(--mincho);
-  font-size: 30px;
-  color: var(--ink-faint);
-  padding: 14px 0 21px;
-}
+.board-cell.is-absent .board-glyph { color: var(--ink-faint); }
+.board-cell.is-absent .board-god { min-height: 1em; }
 .board-governs { margin-top: 7px; font-size: 9.5px; line-height: 1.5; color: var(--ink-faint); }
 .board-caption, .wuxing-caption, .band-caption {
   margin: 9px 0 0;
@@ -1082,6 +1051,9 @@ tr.dominant td, tr.dominant th { color: var(--ink); }
    categorical hue would be read as status no matter what the legend says. */
 .band-bar { fill: var(--brass); opacity: 0.62; }
 .band-cell.is-neutral .band-bar { fill: var(--ink-faint); opacity: 0.75; }
+/* Before the 大運 starts there is no wind either way, so the run is drawn flat
+   and dim — present, but making no claim. */
+.band-cell.is-before .band-bar { fill: var(--ink-faint); opacity: 0.32; }
 .band-cell.is-now .band-bar { opacity: 1; }
 .band-age { font-family: var(--mono); font-size: 8.5px; fill: var(--ink-faint); }
 .band-cell:focus-visible { outline: none; }

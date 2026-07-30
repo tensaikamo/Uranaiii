@@ -7,14 +7,25 @@
  * year, and the reading is the pair. So the band draws both: the decade as the
  * span it is, and each of its ten years as its own cell.
  *
- * **Polarity is position, not colour, and that was forced by measurement.**
+ * **Polarity is position, and no colour at all — both halves of that were
+ * forced by measurement.**
+ *
  * The five element hues are already spoken for by identity, and a sixth and
- * seventh hue for 追い風/向かい風 measured ΔE 4.4 against 木 and 火 — under a
- * floor of 15, meaning a full-colour reader cannot tell them apart. So the
- * strongest channel available goes to the thing that matters most: cells rise
- * above the centre line for 追い風 and drop below it for 向かい風. Element hue
- * stays on the year's own stem, where it means what it means everywhere else,
- * and the labels 追い風/向かい風 are always printed. Three channels, no collision.
+ * seventh hue for 追い風/向かい風 measured ΔE 4.4 against 木 and 火, under a floor
+ * of 15: a full-colour reader cannot tell them apart. So polarity takes the
+ * strongest channel available instead — cells rise above the centre line for
+ * 追い風 and drop below it for 向かい風.
+ *
+ * The first draft still tinted each bar by its year's stem. That read exactly
+ * wrong: a run of red bars says "bad years" to anyone, whatever the legend
+ * claims, because a large field of a categorical hue gets read as status. The
+ * hue came off the bars, and with it the ninety tiny 干支 glyphs, which were
+ * unreadable at this size anyway. Each year still carries its 干支 in the label
+ * a screen reader and a focus ring read out, and the 大運 pillars are named
+ * along the top.
+ *
+ * So: one channel per job. Position is polarity, one brass tone is "a year",
+ * text names the decades, and the element hues stay out of this figure entirely.
  */
 
 import { pillarFromIndex } from '../engine/pillars.js';
@@ -46,6 +57,24 @@ export function yearPillarOf(solarYear) {
  */
 export function annualYears(luck, strength, birthYear) {
   const rows = [];
+
+  // 立運 is rarely zero, so a life usually starts some years before the first
+  // 大運 does. Those years were simply absent from the band, which left a reader
+  // younger than their own 立運 with no "いま" mark and no idea where they were
+  // standing. They are drawn, but with no polarity: with no 大運 running there is
+  // no wind to be at your back or in your face, and claiming one would be
+  // inventing a reading the engine did not make.
+  const firstAge = luck.periods[0].fromAge + (luck.periods[0].fromMonths || 0) / 12;
+  for (let age = 0; age < Math.floor(firstAge); age += 1) {
+    rows.push({
+      solarYear: birthYear + age,
+      age,
+      pillar: yearPillarOf(birthYear + age),
+      period: null,
+      fit: 'before',
+    });
+  }
+
   for (const period of luck.periods) {
     for (let k = 0; k < 10; k += 1) {
       const age = period.fromAge + (period.fromMonths || 0) / 12 + k;
@@ -64,7 +93,7 @@ export function annualYears(luck, strength, birthYear) {
   return rows;
 }
 
-const FIT_TEXT = { needed: '追い風', avoided: '向かい風', neutral: '平' };
+const FIT_TEXT = { needed: '追い風', avoided: '向かい風', neutral: '平', before: '大運が始まる前' };
 const FIT_MARK = { needed: '▲', avoided: '▼', neutral: '—' };
 
 /**
@@ -97,6 +126,7 @@ export function buildLuckBand(luck, strength, { birthYear, nowAge = null } = {})
   const decades = node('g', { class: 'band-decades' });
   for (const period of luck.periods) {
     const first = years.findIndex((y) => y.period === period);
+    // (the leading 大運前 run has period === null, so findIndex lands correctly)
     if (first < 0) continue;
     const x = first * cellW;
     decades.append(node('line', { class: 'band-sep', x1: x, y1: 20, x2: x, y2: H - 18 }));
@@ -107,12 +137,23 @@ export function buildLuckBand(luck, strength, { birthYear, nowAge = null } = {})
     label.textContent = period.pillar.text;
     decades.append(label);
   }
+  // Name the stretch before the 大運 starts, so the flat run reads as "not yet"
+  // rather than as "nothing happens".
+  const beforeCount = years.filter((y) => y.fit === 'before').length;
+  if (beforeCount > 0) {
+    const label = node('text', { class: 'band-decade', x: 2, y: 13 });
+    label.textContent = '大運前';
+    decades.append(label);
+    decades.append(node('line', {
+      class: 'band-sep', x1: beforeCount * cellW, y1: 20, x2: beforeCount * cellW, y2: H - 18,
+    }));
+  }
   svg.append(decades);
 
   const cells = node('g', { class: 'band-cells' });
   for (const [i, y] of years.entries()) {
     const x = i * cellW;
-    const h = y.fit === 'neutral' ? 4 : RISE;
+    const h = y.fit === 'needed' || y.fit === 'avoided' ? RISE : 4;
     const top = y.fit === 'needed' ? MID - h : y.fit === 'avoided' ? MID : MID - 2;
 
     const g = node('g', {
@@ -120,6 +161,7 @@ export function buildLuckBand(luck, strength, { birthYear, nowAge = null } = {})
       tabindex: '0',
       role: 'listitem',
       'aria-label': `${y.solarYear}年 ${y.age}歳 ${y.pillar.text} ${FIT_TEXT[y.fit]}`,
+      'data-fit': y.fit,
     });
     // One colour for every bar. The first draft tinted each year by its stem's
     // element and it read exactly wrong: a wall of red bars says "bad years" to
