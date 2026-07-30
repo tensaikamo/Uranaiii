@@ -249,11 +249,31 @@ function advicePassages(strength, year) {
 
 /* --- assembly ------------------------------------------------------------- */
 
+/**
+ * A UT Julian Day back into a JS Date, so one "now" can drive the whole reading.
+ *
+ * The fractional hour is carried in the milliseconds argument and left to
+ * `Date.UTC` to normalise, which avoids decomposing it into h/m/s by hand — the
+ * arithmetic that produced 23:61 in `formatJst` before it was fixed.
+ */
+function dateFromJdUt(jd) {
+  const { year, month, day, hour } = calendarDate(jd);
+  return new Date(Date.UTC(year, month - 1, day, 0, 0, 0, Math.round(hour * 3600000)));
+}
+
 export function speak(chart, nowJdUt, input = {}) {
   const strength = judgeBoth(chart.pillars);
   const year = yearAhead(chart, strength, nowJdUt);
   const luck = luckPeriods(chart, strength, input.sex);
-  const when = timeline(input, strength, luck);
+  // One "now" for the whole reading, derived from the one that was passed in.
+  //
+  // `timeline` used to be called without it and fell back to `new Date()`, so a
+  // caller could move the year but not the day: 年運 followed the argument while
+  // the 今日 row stayed on the wall clock. That is not only inconsistent between
+  // two sentences on the same page — it made the measured frequencies for
+  // `today:*` depend on the day tools/build-rarity.mjs happened to run, which
+  // quietly voids the "20,000人ぶんを実際に数えた" claim for those keys.
+  const when = timeline(input, strength, luck, dateFromJdUt(nowJdUt));
   return {
     strength,
     when: {

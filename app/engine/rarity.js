@@ -7,11 +7,17 @@
  * unusual configuration from a near-universal one. Without them, "月支が午で火"
  * reads as a personal revelation when it is true of a twelfth of everybody.
  *
- * Keys beginning voiceYear: are relative to the solar year this table was
- * built in, because that is what a year reading is about.
+ * Keys that name a moment — year:, today:, tl:, adviceYear:, luck: — are
+ * relative to **2026-07-30** (JST), the day this table was counted on. A
+ * "this year is a headwind" frequency has to be as of some year; saying which
+ * one is the difference between a measurement and a decoration. Re-run with a
+ * pinned date to reproduce:  node tools/build-rarity.mjs 20000 2026-07-30
  */
 
 export const RARITY_SAMPLES = 20000;
+
+/** JST date the moment-dependent keys were measured against. */
+export const RARITY_COUNTED_ON = '2026-07-30';
 
 export const RARITY = {
   "monthCommand:木比和": 0.0001,

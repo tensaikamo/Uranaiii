@@ -17,10 +17,11 @@ import { resolveUncertainty } from '../app/engine/uncertainty.js';
 import { readChart, readingSignature, summarise } from '../app/engine/reading.js';
 import { voiceStatements } from '../app/engine/voice.js';
 import { strokesOf } from '../app/engine/strokes.js';
-import { fiveGrids, elementOfCount } from '../app/engine/name.js';
+import { fiveGrids, elementOfCount, readName } from '../app/engine/name.js';
 import { luckDirection, luckPeriods, luckOnset, ageNow, ageExact, cycleAtAge } from '../app/engine/luck.js';
 import { hiddenStems, hiddenTable, TRIADS, NO_MIDDLE } from '../app/engine/hidden.js';
-import { timeline } from '../app/engine/timeline.js';
+import { timeline, summariseTimeline } from '../app/engine/timeline.js';
+import { speak } from '../app/engine/voice.js';
 import { judgeStrength, judgeBoth } from '../app/engine/strength.js';
 import { gauges, dayStemInDoubt, SCORE_SCALE } from '../app/engine/gauges.js';
 import { domainBullets, summaryCards, domainStatements, DOMAINS, MAX_PER_DOMAIN, ROOTED_AT } from '../app/engine/domains.js';
@@ -991,6 +992,133 @@ const DAY_PILLARS = [
   const keysOf = (c) => domainStatements(c, judgeBoth(c.pillars)).map((b) => b.key).join('|');
   record('伝え方', '同じ生年月日は毎回同じ箇条書きを出す',
     keysOf(once) === keysOf(twice), `${domainStatements(once, judgeBoth(once.pillars)).length} 件が一致`);
+}
+
+// --- 精査で見つかった穴の回帰検算 -------------------------------------------
+//
+// Every check here corresponds to a defect that was actually shipped. Named
+// individually so a regression says which one came back.
+{
+  const chart = buildChart({ year: 1990, month: 6, day: 15, hour: 6, minute: 30, precision: 'pm5', longitude: 141.77 }, DEFAULT_AXES);
+  const strength = judgeBoth(chart.pillars);
+
+  // A1 — 姓名判断 must refuse rather than assert from characters it cannot count.
+  // "Smith / John" used to yield five grids of 0画・水 and a confident verdict,
+  // sourced in form and empty in fact.
+  const refuses = [['Smith', 'John'], ['田中', '😀'], ['田中', '😀太郎'], ['😀', '太郎']];
+  const reads = [['村井', '響'], ['やまだ', 'たろう'], ['村', '井'], ['田中', '太😀']];
+  const wrongRefusal = refuses.filter(([a, b]) => readName(a, b, strength) !== null);
+  const wrongRead = reads.filter(([a, b]) => readName(a, b, strength) === null);
+  record('伝え方', '画数が引けない名前では姓名判断を出さない',
+    wrongRefusal.length === 0 && wrongRead.length === 0,
+    `断定してしまう名前 ${wrongRefusal.length} 件、読めるのに拒否 ${wrongRead.length} 件`
+    + `（0画の五格から「水」と言い切っていたのを止めた）`);
+
+  // A2 — the summary must never name a direction and then deny it. The old
+  // avoided-with-a-tie case fell through to the neutral sentence on 1.0% of
+  // readings. Swept over every reachable combination of row fits rather than
+  // sampled, so the branch cannot come back unnoticed.
+  {
+    const fits = ['needed', 'avoided', 'neutral'];
+    const bad = [];
+    for (const todayFit of fits) {
+      for (const a of fits) {
+        for (const b of fits) {
+          for (const withLuck of [true, false]) {
+            const rows = [];
+            if (withLuck) rows.push({ scale: '10年', fit: a, pillar: chart.pillars.year });
+            rows.push({ scale: '今年', fit: b, pillar: chart.pillars.year });
+            rows.push({ scale: '今月', fit: a, pillar: chart.pillars.month });
+            rows.push({ scale: '今日', fit: todayFit, pillar: chart.pillars.day });
+            const text = summariseTimeline(rows);
+            const named = /\*\*(追い風|向かい風)\*\*/.test(text);
+            if (named && text.includes('特に押しも引きもない')) {
+              bad.push(`${todayFit}/${a}/${b}${withLuck ? '' : '(大運なし)'}`);
+            }
+          }
+        }
+      }
+    }
+    record('伝え方', '時の欄が「向かい風」と「押しも引きもない」を同時に言わない',
+      bad.length === 0,
+      bad.length === 0 ? '54通りの組み合わせを全て掃いて矛盾なし'
+        : `矛盾 ${bad.length} 件: ${bad.slice(0, 3).join(', ')}`);
+  }
+
+  // A4 — one "now" for the whole reading. 年運 followed the argument while the
+  // 今日 row read the wall clock, which made the measured frequency of `today:*`
+  // depend on the day the generator happened to run.
+  {
+    const input = { year: 1990, month: 6, day: 15, hour: 6, minute: 30, precision: 'pm5', longitude: 141.77, sex: 'male' };
+    // 03:00 UT = 12:00 JST, so the JST date is unambiguous.
+    const a = speak(chart, julianDay(2027, 1, 15, 3), input);
+    const b = speak(chart, julianDay(2030, 12, 25, 3), input);
+    const rowOf = (v) => v.when.rows[v.when.rows.length - 1].when;
+    // And the day must turn at Japanese midnight, not UTC midnight.
+    const late = speak(chart, julianDay(2026, 7, 29, 14.5), input);  // 23:30 JST 7/29
+    const early = speak(chart, julianDay(2026, 7, 29, 15.5), input); // 00:30 JST 7/30
+    record('伝え方', '渡した「いま」が年運と時の欄の両方を動かす',
+      rowOf(a) === '1月15日' && rowOf(b) === '12月25日'
+      && rowOf(late) === '7月29日' && rowOf(early) === '7月30日',
+      `${rowOf(a)} / ${rowOf(b)}、日本の深夜で切り替わる: ${rowOf(late)} → ${rowOf(early)}`);
+  }
+
+  // A9 — cycleAtAge degrades instead of throwing on a malformed argument.
+  {
+    let survived = true;
+    for (const bad of [null, undefined, {}, { periods: null }, 0, false, 'x']) {
+      try { if (cycleAtAge(bad, 30) !== null) survived = false; } catch { survived = false; }
+    }
+    record('伝え方', 'cycleAtAge は壊れた引数で例外を投げない', survived,
+      '7種の不正な引数すべてで null を返す');
+  }
+
+  // A5 — the smallest text carries the source chips and every disclaimer, so it
+  // has to clear the 4.5:1 floor. Measured against the ground *and* against the
+  // aurora that sits over it, which is the lighter of the two.
+  {
+    const srgb = (h) => h.replace('#', '').match(/../g).map((x) => parseInt(x, 16) / 255);
+    const lin = (c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+    const lum = (h) => { const [r, g, b] = srgb(h).map(lin); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+    const ratio = (a, b) => (Math.max(lum(a), lum(b)) + 0.05) / (Math.min(lum(a), lum(b)) + 0.05);
+    const css = readFileSync(join(ROOT, 'app/style.css'), 'utf8');
+    const tokenOf = (name) => (css.match(new RegExp(`--${name}:\\s*(#[0-9A-Fa-f]{6})`)) || [])[1];
+    const GROUND = '#070C14';
+    const AURORA = '#131C29'; // ground + the three radial washes at their peak
+    const rows = [['ink', 4.5], ['ink-dim', 4.5], ['ink-faint', 4.5]];
+    const failures = [];
+    const detail = [];
+    for (const [token, need] of rows) {
+      const hex = tokenOf(token);
+      const worst = Math.min(ratio(hex, GROUND), ratio(hex, AURORA));
+      detail.push(`${token} ${hex} ${worst.toFixed(2)}`);
+      if (!hex || worst < need) failures.push(`${token}=${hex} ${worst.toFixed(2)}`);
+    }
+    record('伝え方', '本文と出典チップと注意書きが 4.5:1 を満たす',
+      failures.length === 0,
+      failures.length === 0 ? `オーロラ上の最悪値: ${detail.join(' / ')}`
+        : `未達: ${failures.join(', ')}`);
+  }
+
+  // A7 — latitude is not asked for anywhere, because nothing uses it.
+  {
+    const files = ['index.html', 'voice.html', 'app/main.js', 'app/voice-main.js'];
+    const hits = files.filter((f) => readFileSync(join(ROOT, f), 'utf8').includes('latitude'));
+    record('伝え方', '使わない緯度を入力欄に置いていない', hits.length === 0,
+      hits.length === 0 ? '4ファイルすべてに latitude が無い' : `残っている: ${hits.join(', ')}`);
+  }
+
+  // A3 — the date field cannot offer a birth that has not happened.
+  {
+    const guards = ['index.html', 'voice.html'].every((f) => {
+      const html = readFileSync(join(ROOT, f), 'utf8');
+      return /id="birthdate"/.test(html);
+    });
+    const capped = ['app/main.js', 'app/voice-main.js'].every((f) =>
+      readFileSync(join(ROOT, f), 'utf8').includes('japanNow'));
+    record('伝え方', '未来の生年月日を弾く仕掛けが両ページにある', guards && capped,
+      '両ページが japanNow() で max を今日に切り下げ、送信時にも検査する');
+  }
 }
 
 // --- report -----------------------------------------------------------------

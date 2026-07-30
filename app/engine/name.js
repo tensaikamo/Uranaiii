@@ -58,6 +58,24 @@ export function fiveGrids(surname, given) {
   const mei = countPart(given);
   if (sei.chars.length === 0 || mei.chars.length === 0) return null;
 
+  // A part with no countable character at all cannot produce 画数, and every
+  // grid built from it would be 0 — which `elementOfCount` happily maps to 水.
+  // That is how "Smith / John" produced five grids of 0画・水 and a confident
+  // "your name does not supply what you lack": sourced in form, empty in fact.
+  // Refusing is the only honest answer; a caveat under a fabricated number is
+  // not one.
+  if (sei.chars.every((c) => c.strokes === null)) return null;
+  if (mei.chars.every((c) => c.strokes === null)) return null;
+
+  // 人格 is built from exactly two characters — the last of the family name and
+  // the first of the given name — and the reading leads with it in every branch.
+  // If either of those two is uncountable, 人格 silently becomes "the other one
+  // plus nothing", so the reading would be led by a number that is wrong rather
+  // than merely imprecise. The other grids tolerate a missing character with a
+  // stated caveat; this one cannot.
+  const jinkakuChars = [sei.chars[sei.chars.length - 1], mei.chars[0]];
+  if (jinkakuChars.some((c) => c.strokes === null)) return null;
+
   const seiSolo = sei.chars.length === 1;
   const meiSolo = mei.chars.length === 1;
 

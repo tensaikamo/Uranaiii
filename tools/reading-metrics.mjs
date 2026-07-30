@@ -1,12 +1,21 @@
 /**
  * Anti-Barnum measurement for the reading layer (spec, appendix).
  *
- *   被覆率  the share of charts that get at least one sourced statement
- *   弁別率  the share of charts whose readings differ from one another
+ *   被覆率      the share of charts that get at least one sourced statement
+ *   組み合わせ数  how many *different* readings the rules can produce at all
+ *   最頻共有率    the share of people who get the single most common reading
  *
  * Discrimination is measured on the *combination of sources*, never on the
  * rendered text. Measuring text would reward a rule for rephrasing the same
  * claim, which is precisely the failure this number exists to catch.
+ *
+ * There used to be a 弁別率 here, defined as distinct-combinations ÷ samples.
+ * It was worse than useless, because **it falls as the sample grows**: the same
+ * engine and the same rules measured 46.2% at 1,000 charts and 2.4% at 40,000.
+ * Any number quoted from it was really a statement about the sample size. What
+ * matters is where the distinct-combination count *saturates* — that is the
+ * ceiling on how many different readings exist, and it does not move — together
+ * with the share of people who collide on the commonest one.
  *
  * 被覆率 × 弁別率 is the objective. This tool only measures it — the
  * self-improving loop the appendix describes is deliberately not built, because
@@ -34,6 +43,10 @@ const rnd = (a, b) => {
 };
 
 const signatures = new Map();
+// The ceiling: no reading layer can distinguish more cases than there are
+// distinct 命式 to distinguish. Without it, a combination count is a number with
+// nothing to compare it to.
+const charts = new Map();
 const bulletSignatures = new Map();
 const bulletHits = new Map();
 let bulletTotal = 0;
@@ -53,6 +66,7 @@ for (let i = 0; i < SAMPLES; i += 1) {
     longitude: 122 + rnd(0, 3200) / 100,
   };
   const chart = buildChart(input, DEFAULT_AXES);
+  charts.set(chart.signature, 1);
   const statements = readChart(chart);
 
   if (statements.length > 0) covered += 1;
@@ -82,19 +96,22 @@ for (let i = 0; i < SAMPLES; i += 1) {
 
 const coverage = covered / SAMPLES;
 const distinct = signatures.size;
-// A chart is discriminated if no other chart in the sample shares its sources.
 const unique = [...signatures.values()].filter((n) => n === 1).length;
-const discrimination = distinct / SAMPLES;
+const boardMost = Math.max(...signatures.values());
 
 const pct = (x) => `${(x * 100).toFixed(1)}%`;
 
-console.log(`sample: ${SAMPLES} charts, ${EPHEMERIS_YEARS.from}-${EPHEMERIS_YEARS.to} range restricted to 1930-2030\n`);
+console.log(`sample: ${SAMPLES} charts, ${EPHEMERIS_YEARS.from}-${EPHEMERIS_YEARS.to} range restricted to 1930-2030`);
+console.log(`ceiling: ${charts.size} distinct 命式 reachable in this sample\n`);
 console.log(`被覆率 (coverage)        ${pct(coverage)}   ${covered}/${SAMPLES} charts got a sourced statement`);
-console.log(`弁別率 (discrimination)  ${pct(discrimination)}   ${distinct} distinct source-combinations`);
-console.log(`  of which unique        ${unique} charts share their reading with no other`);
-console.log(`\n被覆率 × 弁別率          ${pct(coverage * discrimination)}   <- the anti-Barnum objective`);
+console.log(`組み合わせ数             ${distinct}   different board readings exist`);
+console.log(`  上限到達率             ${pct(distinct / charts.size)}   of the ${charts.size} distinct 命式`);
+console.log(`  最頻共有率             ${pct(boardMost / SAMPLES)}   most common reading is shared by ${boardMost} charts`);
+console.log(`  一意                   ${unique} charts share their reading with no other`);
 console.log(`\nstatements per chart     ${(statementTotal / SAMPLES).toFixed(2)} average`);
 console.log(`unsourced statements     ${unsourced}   (must be 0 — the filter is in readChart)`);
+console.log(`\nRe-run at two sample sizes and compare 組み合わせ数. If it is still climbing,`);
+console.log(`the count has not saturated yet and is a floor, not a ceiling.`);
 
 console.log('\nrule fire rates:');
 for (const [name, hits] of ruleHits) {
@@ -106,9 +123,11 @@ console.log(`\nmost common reading shared by ${most[1]} charts (${pct(most[1] / 
 
 /* --- the delivery layer: bars and per-scene bullets ----------------------- */
 
-const bulletDistinct = bulletSignatures.size / SAMPLES;
+const bulletMost = Math.max(...bulletSignatures.values());
 console.log(`\n--- 伝え方の層（目盛り・場面ごとの箇条書き） ---`);
-console.log(`弁別率 (discrimination)  ${pct(bulletDistinct)}   ${bulletSignatures.size} distinct source-combinations`);
+console.log(`組み合わせ数             ${bulletSignatures.size}   different bullet-sets exist`);
+console.log(`  上限到達率             ${pct(bulletSignatures.size / charts.size)}   of the ${charts.size} distinct 命式`);
+console.log(`  最頻共有率             ${pct(bulletMost / SAMPLES)}   most common bullet-set is shared by ${bulletMost} charts`);
 console.log(`bullets per chart        ${(bulletTotal / SAMPLES).toFixed(2)} average`);
 
 // Any single line true of most people is a Barnum line, whatever it feels like

@@ -27,6 +27,7 @@ import { FIT_LABEL } from './engine/timeline.js';
 import { frequencyOf, RARITY_SAMPLES } from './engine/rarity.js';
 import { el } from './ui/render.js';
 import { startSky } from './ui/sky.js';
+import { japanNow } from './engine/time.js';
 
 startSky(document.getElementById('sky'));
 
@@ -82,6 +83,17 @@ form.addEventListener('submit', (event) => {
       `使っている天体暦は西暦 ${EPHEMERIS_YEARS.from} 年から ${EPHEMERIS_YEARS.to} 年までです。この範囲の日付を入れてください。`));
     return;
   }
+  // A birth that has not happened yet gives a negative age. The 大運 row then
+  // vanishes from the timeline while every other row still renders, so the page
+  // looks complete and means nothing. 1929 mistyped as 2029 is an ordinary slip.
+  {
+    const t = japanNow();
+    if (Date.UTC(year, month - 1, day) > Date.UTC(t.year, t.month - 1, t.day)) {
+      output.append(el('p', 'notice',
+        '生年月日が未来になっています。1929年を2029年と打ち間違えていませんか。'));
+      return;
+    }
+  }
 
   try {
     render({
@@ -91,12 +103,24 @@ form.addEventListener('submit', (event) => {
       year, month, day, hour, minute,
       precision: time ? 'pm5' : 'unknown',
       longitude: Number(document.getElementById('longitude').value),
-      latitude: Number(document.getElementById('latitude').value),
     });
   } catch (error) {
-    output.append(el('p', 'notice', `読めませんでした。${error && error.message ? error.message : ''}`));
+    // The reader gets a sentence; the stack goes to the console. A raw
+    // "Cannot read properties of undefined" in a Japanese page helps nobody.
+    console.error(error);
+    output.append(el('p', 'notice',
+      '占えませんでした。入力を確かめてもう一度試してください。'
+      + '同じところで止まる場合は、原因の詳細がブラウザのコンソールに出ています。'));
   }
 });
+
+// Stop the date picker offering days that have not happened.
+{
+  const t = japanNow();
+  const iso = `${t.year}-${String(t.month).padStart(2, '0')}-${String(t.day).padStart(2, '0')}`;
+  const field = document.getElementById('birthdate');
+  if (field && (!field.max || field.max > iso)) field.max = iso;
+}
 
 /**
  * Body text into paragraphs, with **emphasis** honoured.

@@ -91,12 +91,22 @@ export function summariseTimeline(rows) {
   } else if (today.fit === 'avoided' && good > bad) {
     text += `\n\nただし大きい流れのほうは追い風です。一日単位の不調は、`
       + `そのまま長期の不調にはなりません。今日は無理をしない、で足ります。`;
+  } else if (today.fit === 'avoided') {
+    // 向かい風 with the wider scales tied. Without this branch the tie fell
+    // through to the neutral 'else' below, and the summary said
+    // 「今日は向かい風です。特に押しも引きもない日です」— two sentences
+    // contradicting each other, on 1.0% of readings.
+    text += `\n\n上の段はどちらとも言えないので、向かい風は今日の分だけです。`
+      + `長い流れの話ではないので、明日に持ち越す必要はありません。`;
   } else if (today.fit === 'needed' && bad > good) {
     text += `\n\n大きい流れは向かい風なので、今日のような日を拾っていく形になります。`
       + `動くならこういう日です。`;
   } else if (today.fit === 'needed') {
     text += `\n\n上の段も追い風です。重なっている日なので、動かすなら今日です。`;
   } else {
+    // Reached only when today itself is neutral — every 追い風/向かい風 case is
+    // handled above. Keep it that way: this sentence must never sit under a
+    // headline that already named a direction.
     text += `\n\n特に押しも引きもない日です。決めたことをそのまま進める日として使えます。`;
   }
   return text;

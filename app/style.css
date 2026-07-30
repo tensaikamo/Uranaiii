@@ -39,7 +39,14 @@
 
   --ink: #E7E1D4;
   --ink-dim: #98A2B0;
-  --ink-faint: #626C7C;
+  /*
+   * The smallest text in the app carries the source chips (.cite) and every
+   * disclaimer (.hint) — the two things that have to be readable for the
+   * honesty claims to mean anything. The old #626C7C measured 3.69:1 on the
+   * ground and 3.23:1 over the aurora, both under the 4.5:1 floor for text
+   * this size. Same hue, raised until it passes: 5.32:1 and 4.65:1.
+   */
+  --ink-faint: #7A869A;
   --rule: rgba(201, 169, 97, 0.13);
   --rule-strong: rgba(201, 169, 97, 0.28);
 
@@ -787,6 +794,7 @@ button.primary:active { background: rgba(201, 169, 97, 0.2); }
 .cite.is-freq { color: var(--brass); border-color: var(--brass-faint); }
 
 .colophon a { color: var(--brass); }
+.diverge { color: var(--el-earth); }
 
 /* --- the correction toggle ----------------------------------------------- */
 

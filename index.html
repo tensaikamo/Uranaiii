@@ -47,19 +47,14 @@
       <p class="hint" id="precision-hint"></p>
     </fieldset>
 
-    <div class="field-pair">
-      <div class="field">
-        <label for="longitude">東経</label>
-        <input type="number" id="longitude" value="141.79" min="122" max="154" step="0.01" inputmode="decimal" required>
-      </div>
-      <div class="field">
-        <label for="latitude">北緯</label>
-        <input type="number" id="latitude" value="43.20" min="20" max="46" step="0.01" inputmode="decimal" required>
-      </div>
+    <div class="field">
+      <label for="longitude">東経</label>
+      <input type="number" id="longitude" value="141.79" min="122" max="154" step="0.01" inputmode="decimal" required>
     </div>
     <p class="hint">
       既定は北海道岩見沢市。都市名検索は置かない — 地名を引くと外部に通信が出るため
-      （<a href="#privacy">送信ゼロ</a>）。緯度は記録として受け取るが、命式に効くのは経度だけ。
+      （<a href="#privacy">送信ゼロ</a>）。緯度は訊かない — 真太陽時のずれは経度だけで決まり、
+      保存も送信もしないこのアプリに「記録として受け取る」入力欄が要る理由が無い。
     </p>
     <p class="hint">
       <strong>日本国内の出生に限る。</strong>標準時は UTC+9 固定で、1948〜1951年の

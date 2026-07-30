@@ -17,6 +17,7 @@ import {
 import { buildDial, updateDial } from './ui/dial.js';
 import { startSky } from './ui/sky.js';
 import { clockHour } from './engine/pillars.js';
+import { japanNow } from './engine/time.js';
 
 const boot = document.getElementById('boot');
 const form = document.getElementById('form');
@@ -95,21 +96,72 @@ form.addEventListener('submit', (event) => {
     showError('経度が読めません。東経を十進法で入力してください（岩見沢なら 141.79）。');
     return;
   }
+  if (isFuture(year, month, day)) {
+    showError('生年月日が未来になっています。1929年を2029年と打ち間違えていませんか。');
+    return;
+  }
 
   state.input = {
     year, month, day, hour, minute,
     precision: known && !time ? 'unknown' : state.precision,
     longitude,
-    latitude: Number(document.getElementById('latitude').value),
   };
 
   try {
     render();
   } catch (error) {
-    // Better a stated failure than a chart that is quietly wrong (§6).
-    showError(`命式を立てられませんでした。${error && error.message ? error.message : ''}`);
+    // Better a stated failure than a chart that is quietly wrong (§6) — but the
+    // failure has to be readable. A raw JS message ("Cannot read properties of
+    // undefined") in the middle of a Japanese page tells the reader nothing, so
+    // it goes to the console and the page gets a sentence.
+    console.error(error);
+    showError('命式を立てられませんでした。入力を確かめてもう一度試してください。'
+      + '同じところで止まる場合は、原因の詳細がブラウザのコンソールに出ています。');
   }
 });
+
+/**
+ * Is this date still ahead of us, in Japan?
+ *
+ * A birth that has not happened yet gives a negative age, which silently drops
+ * the 大運 row out of the timeline while every other row still renders — so the
+ * page looks fine and means nothing. Mistyping 1929 as 2029 is an ordinary slip.
+ */
+function isFuture(year, month, day) {
+  const today = japanNow();
+  return Date.UTC(year, month - 1, day) > Date.UTC(today.year, today.month - 1, today.day);
+}
+
+/** Stop the date picker offering days that have not happened. */
+function capBirthdateAtToday() {
+  const t = japanNow();
+  const iso = `${t.year}-${String(t.month).padStart(2, '0')}-${String(t.day).padStart(2, '0')}`;
+  const field = document.getElementById('birthdate');
+  if (field && (!field.max || field.max > iso)) field.max = iso;
+}
+capBirthdateAtToday();
+
+/**
+ * Tell the reader when this page and the 語り page have diverged.
+ *
+ * Appended to the footer link rather than shown as a warning: nothing is wrong,
+ * the two pages are answering with different axis choices, and that is exactly
+ * what the toggle is for.
+ */
+function noteVoiceDivergence(correctionOn) {
+  const link = document.querySelector('footer a[href="voice.html"]');
+  if (!link) return;
+  const existing = document.getElementById('voice-divergence');
+  if (correctionOn) {
+    if (existing) existing.remove();
+    return;
+  }
+  if (existing) return;
+  const note = el('span', 'diverge', '　※ いま真太陽時補正を切っています。'
+    + '語りのページは補正ありで読むので、命式そのものが違って出ることがあります。');
+  note.id = 'voice-divergence';
+  link.parentElement.append(note);
+}
 
 function showError(message) {
   output.hidden = false;
@@ -192,6 +244,12 @@ function render() {
   toggle.addEventListener('click', () => {
     state.correction = !state.correction;
     toggle.setAttribute('aria-pressed', String(state.correction));
+    // The 語り page always reads with the correction on. Turning it off here
+    // means the two pages are looking at different boards — measured over 4,000
+    // charts, 40.9% of them differ, 8.5% reach a different 身強身弱 verdict and
+    // 11.7% a different 用神. Saying so is the same disclosure §4.1 asks for on
+    // any other axis.
+    noteVoiceDivergence(state.correction);
     const next = buildChart(input, currentAxes());
     const changed = updateChartElement(state.chartRoot, next);
 

@@ -122,7 +122,10 @@ export function luckPeriods(chart, strength, sex, count = 9) {
  * than stretching the first cycle backwards to cover the gap.
  */
 export function cycleAtAge(luck, exactAge) {
-  if (!luck) return null;
+  // `timeline(input, strength, luck, now)` takes luck third; passing the wrong
+  // object there used to throw here instead of degrading, which turns an
+  // argument-order slip into a blank page.
+  if (!luck || !Array.isArray(luck.periods)) return null;
   return luck.periods.find((p) => {
     const from = p.fromAge + (p.fromMonths || 0) / 12;
     return exactAge >= from && exactAge < from + 10;

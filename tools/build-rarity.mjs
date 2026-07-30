@@ -8,8 +8,9 @@
  * turns out to be near-universal is labelled as such instead of being dressed
  * up as personal insight.
  *
- * Run:  node tools/build-rarity.mjs [samples]
- * Writes app/engine/rarity.js. Re-run it whenever a rule changes.
+ * Run:  node tools/build-rarity.mjs [samples] [YYYY-MM-DD]
+ * Writes app/engine/rarity.js. Re-run it whenever a rule changes. The date pins
+ * the moment-dependent keys (年運・日運) so the table can be reproduced.
  */
 
 import { writeFileSync } from 'node:fs';
@@ -29,14 +30,26 @@ const SAMPLES = Number(process.argv[2]) || 20000;
 
 await initEphemeris();
 
-// The 年運 passage compares the chart against the solar year in progress, so
-// its frequency is necessarily "as of now" — it answers "this year, how many
-// people are in a pressure year", which is exactly what it should mean.
-const now = new Date();
+// The 年運 and 日運 passages compare the chart against the year and the day in
+// progress, so their frequencies are necessarily "as of a date" — they answer
+// "of everybody, how many are in a pressure year today", which is what they
+// should mean. But a date-dependent number has to *say* its date, or nobody can
+// reproduce it. So it is stamped into the generated file, and can be pinned:
+//
+//   node tools/build-rarity.mjs 20000 2026-07-30
+//
+// One "now" drives the whole reading (see speak() in voice.js); this is it.
+const pinned = process.argv[3];
+const now = pinned ? new Date(`${pinned}T03:00:00Z`) : new Date();
+if (Number.isNaN(now.getTime())) {
+  console.error(`第2引数の日付が読めません: ${pinned}（例: 2026-07-30）`);
+  process.exit(1);
+}
 const nowJdUt = julianDay(
   now.getUTCFullYear(), now.getUTCMonth() + 1, now.getUTCDate(),
   now.getUTCHours() + now.getUTCMinutes() / 60,
 );
+const COUNTED_ON = new Date(now.getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10);
 
 let seed = 20260729;
 const rnd = (a, b) => {
@@ -85,11 +98,17 @@ const body = `/**
  * unusual configuration from a near-universal one. Without them, "月支が午で火"
  * reads as a personal revelation when it is true of a twelfth of everybody.
  *
- * Keys beginning voiceYear: are relative to the solar year this table was
- * built in, because that is what a year reading is about.
+ * Keys that name a moment — year:, today:, tl:, adviceYear:, luck: — are
+ * relative to **${COUNTED_ON}** (JST), the day this table was counted on. A
+ * "this year is a headwind" frequency has to be as of some year; saying which
+ * one is the difference between a measurement and a decoration. Re-run with a
+ * pinned date to reproduce:  node tools/build-rarity.mjs ${SAMPLES} ${COUNTED_ON}
  */
 
 export const RARITY_SAMPLES = ${SAMPLES};
+
+/** JST date the moment-dependent keys were measured against. */
+export const RARITY_COUNTED_ON = '${COUNTED_ON}';
 
 export const RARITY = ${JSON.stringify(table, null, 2)};
 
