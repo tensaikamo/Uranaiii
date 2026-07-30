@@ -33,8 +33,12 @@ import { frequencyOf, RARITY_SAMPLES } from './engine/rarity.js';
 import { el } from './ui/render.js';
 import { startSky } from './ui/sky.js';
 import { japanNow } from './engine/time.js';
+import { attachPlaceField } from './ui/placefield.js';
 
 startSky(document.getElementById('sky'));
+
+// 生まれた場所から経度を引く。表は同梱なので、通信は発生しない。
+attachPlaceField();
 
 const boot = document.getElementById('boot');
 const form = document.getElementById('form');

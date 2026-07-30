@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#070C14">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="app/icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="app/icons/apple-touch-icon.png">
+<!-- iOS reads these rather than the manifest for the status bar and title. The
+     manifest is still what declares the scope, and the scope is what keeps a
+     tap on the footer link inside the app instead of bouncing out to Safari. -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="託宣">
+<title>託宣 — 命式</title>
+<link rel="stylesheet" href="app/style.css">
+</head>
+<body class="oracle-page">
+
+<canvas id="sky" aria-hidden="true"></canvas>
+
+<noscript>
+  <p class="notice">このページは JavaScript で計算します。有効にしてください。</p>
+</noscript>
+
+<header class="masthead">
+  <h1>託宣</h1>
+  <p class="subtitle">同じ盤を、占いの口調で</p>
+</header>
+
+<nav class="tabs" aria-label="ページ">
+  <a href="index.html">盤</a>
+  <a href="voice.html">語り</a>
+  <a href="oracle.html" aria-current="page">託宣</a>
+</nav>
+
+<main>
+
+  <!--
+    The caution, said once.
+
+    The other two pages hedge every few sentences, and that is exactly what
+    keeps them from ever landing. Here it is stated plainly at the entrance and
+    then not repeated, because a warning threaded through every line is not
+    honesty — it is a way of having it both ways.
+  -->
+  <section class="oath">
+    <p>
+      このページは、<strong>盤のページと同じ計算</strong>から出た言葉を、
+      占いの口調で言い切ります。ためらいの言葉は挟みません。
+    </p>
+    <p>
+      言い切りますが、<strong>作り話はしません</strong>。
+      どの一行も生年月日時から出した八字に紐づいていて、同じ生まれなら何度でも同じことを言います。
+      根拠は最後にまとめて置いてあります。
+    </p>
+    <p class="oath-close">
+      ——「当たっている」と感じたら、それはあなたが自分の話として読んだからです。
+      その読み方こそが占いです。数字で確かめたくなったら、<a href="voice.html">語り</a>へ。
+    </p>
+  </section>
+
+  <div id="boot" class="boot"><p class="boot-line">天体暦を読み込んでいます…</p></div>
+
+  <form id="form" class="panel" hidden>
+    <div class="field">
+      <label for="birthdate">生まれた日</label>
+      <input type="date" id="birthdate" name="birthdate" value="1990-06-15"
+             min="1800-01-01" max="2399-12-31" required>
+    </div>
+
+    <div class="field">
+      <label for="birthtime">生まれた時刻</label>
+      <input type="time" id="birthtime" name="birthtime" value="06:20" step="60">
+      <p class="hint">分からなければ空でも占えます。時柱のぶんだけ言葉が減ります。</p>
+    </div>
+
+    <fieldset class="field">
+      <legend id="sex-label">性別</legend>
+      <div id="sex" class="choices" role="group" aria-labelledby="sex-label"></div>
+      <p class="hint">十年ごとの風向きを出す規則に要ります。答えなくても、風の話が減るだけです。</p>
+    </fieldset>
+
+    <div class="field">
+      <label for="longitude">東経</label>
+      <input type="number" id="longitude" value="141.79" min="122" max="154" step="any" inputmode="decimal" required>
+      <p class="hint">既定は北海道岩見沢市。入力はどこにも保存されません。</p>
+    </div>
+
+    <button type="submit" class="primary" id="cast">託を乞う</button>
+  </form>
+
+  <div id="output" class="output" hidden></div>
+</main>
+
+<footer class="colophon">
+  <p class="version">
+    <a href="index.html">計算の中身が見える「盤」へ →</a>
+  </p>
+</footer>
+
+<script type="module" src="app/oracle-main.js"></script>
+<script>
+// Offline. Registered from the page rather than bundled into the modules so a
+// failure here can never stop the app from running online.
+if ('serviceWorker' in navigator) {
+  addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js', { scope: './' }).catch((error) => {
+      console.warn('offline cache unavailable:', error);
+    });
+  });
+}
+</script>
+</body>
+</html>

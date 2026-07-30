@@ -30,6 +30,12 @@
   <p class="subtitle">天文計算から立てる四柱</p>
 </header>
 
+<nav class="tabs" aria-label="ページ">
+  <a href="index.html" aria-current="page">盤</a>
+  <a href="voice.html">語り</a>
+  <a href="oracle.html">託宣</a>
+</nav>
+
 <main>
   <!-- Shown until the ephemeris is ready; replaced by an explicit failure
        message if it never loads, never left as a blank page. -->
@@ -59,7 +65,7 @@
 
     <div class="field">
       <label for="longitude">東経</label>
-      <input type="number" id="longitude" value="141.79" min="122" max="154" step="0.01" inputmode="decimal" required>
+      <input type="number" id="longitude" value="141.79" min="122" max="154" step="any" inputmode="decimal" required>
     </div>
     <p class="hint">
       既定は北海道岩見沢市。都市名検索は置かない — 地名を引くと外部に通信が出るため

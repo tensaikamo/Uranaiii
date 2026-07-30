@@ -95,7 +95,7 @@ async function cast(page, { time = '06:30', sex = true, voice = false } = {}) {
   await page.waitForSelector('#form:not([hidden])', { timeout: 60000 });
   await page.fill('#birthdate', '1990-06-15');
   await page.fill('#birthtime', time || '');
-  if (voice && sex) await page.click('#sex button:nth-child(1)');
+  if (voice && sex && await page.$('#sex button')) await page.click('#sex button:nth-child(1)');
   await page.fill('#longitude', '141.77');
   await page.click('button[type=submit]');
   await page.waitForSelector('#output:not([hidden])', { timeout: 30000 });
@@ -123,7 +123,7 @@ async function main() {
 
   /* --- privacy, storage, layout, errors, figures ---------------------------- */
 
-  for (const page of ['voice.html', 'index.html']) {
+  for (const page of ['voice.html', 'index.html', 'oracle.html']) {
     const ctx = await browser.newContext({ viewport: { width: 375, height: 812 }, deviceScaleFactor: 2 });
     const tab = await ctx.newPage();
     const errors = [];
@@ -140,7 +140,7 @@ async function main() {
 
     const after = [];
     tab.on('request', (r) => after.push(r.url()));
-    await cast(tab, { voice: page === 'voice.html' });
+    await cast(tab, { voice: page !== 'index.html' });
 
     // The claim is about user data, so it is checked in those terms rather than
     // as a bare request count: the worker legitimately fetches app files.
@@ -206,6 +206,83 @@ async function main() {
         `${shape.bandCells}マス、棒の色 ${shape.bandFills}種（極性は位置）`);
       record('図', '帯の全マスに読み上げラベルがある', shape.bandLabelled);
     }
+    await ctx.close();
+  }
+
+  /* --- 生まれた場所 --------------------------------------------------------- */
+  //
+  // The lookup must never touch the network, and — the part that actually broke —
+  // the value it writes must leave the form submittable. The table carries three
+  // decimals while the input allowed two, so the auto-filled longitude was
+  // invalid and the browser refused to submit *silently*: the button did nothing
+  // and said nothing.
+  for (const page of ['index.html', 'voice.html', 'oracle.html']) {
+    const ctx = await browser.newContext({ viewport: { width: 375, height: 812 } });
+    const tab = await ctx.newPage();
+    await tab.goto(`${BASE}/${page}`, { waitUntil: 'networkidle' });
+    await tab.waitForSelector('#form:not([hidden])', { timeout: 60000 });
+    await tab.evaluate(() => navigator.serviceWorker.ready).catch(() => {});
+    await tab.waitForTimeout(400);
+    const reqs = [];
+    tab.on('request', (r) => reqs.push(r.url()));
+
+    await tab.fill('#place', 'いわみざわ');
+    await tab.waitForTimeout(250);
+    const found = await tab.evaluate(() => document.querySelectorAll('.place-item').length);
+    await tab.click('.place-item:first-child');
+    await tab.waitForTimeout(200);
+    const filled = await tab.evaluate(() => {
+      const lon = document.getElementById('longitude');
+      return { value: lon.value, valid: lon.checkValidity(), formValid: lon.form.checkValidity() };
+    });
+    record('生まれた場所', `${page}: かなで引けて、経度が入る`,
+      found > 0 && Number(filled.value) > 141 && Number(filled.value) < 142,
+      `候補 ${found}件 → ${filled.value}`);
+    record('生まれた場所', `${page}: 入った経度でフォームが送信できる`,
+      filled.valid && filled.formValid,
+      `入力の妥当性 ${filled.valid} / フォーム ${filled.formValid}`);
+    record('生まれた場所', `${page}: 場所を引いても通信は発生しない`, reqs.length === 0,
+      reqs.slice(0, 3).join(' '));
+
+    await tab.fill('#birthdate', '1990-06-15');
+    await tab.fill('#birthtime', '06:30');
+    if (page !== 'index.html' && await tab.$('#sex button')) await tab.click('#sex button:nth-child(1)');
+    await tab.click('button[type=submit]');
+    await tab.waitForSelector('#output:not([hidden])', { timeout: 30000 });
+    await tab.waitForTimeout(800);
+    const cast2 = await tab.evaluate(() => !!(document.querySelector('.chart')
+      || document.querySelector('.gauge') || document.querySelector('.oracle-line')));
+    record('生まれた場所', `${page}: 引いた経度でそのまま占える`, cast2);
+    await ctx.close();
+  }
+
+  /* --- 託宣 ---------------------------------------------------------------- */
+  {
+    const ctx = await browser.newContext({ viewport: { width: 375, height: 900 }, reducedMotion: 'reduce' });
+    const tab = await ctx.newPage();
+    const errors = [];
+    tab.on('pageerror', (e) => errors.push(String(e)));
+    await tab.goto(`${BASE}/oracle.html`, { waitUntil: 'networkidle' });
+    await cast(tab, { voice: true });
+    const r = await tab.evaluate(() => ({
+      lines: document.querySelectorAll('.oracle-line').length,
+      title: !!document.querySelector('.oracle-line.is-title'),
+      proof: document.querySelectorAll('.proof-item').length,
+      unsourced: [...document.querySelectorAll('.proof-item')].filter((i) => !i.querySelector('.cite')).length,
+      // The caution belongs at the entrance and nowhere else: hedging threaded
+      // through the reading is exactly what this page exists to stop doing.
+      oath: document.querySelectorAll('.oath').length,
+      hedgeInside: [...document.querySelectorAll('.oracle-line')]
+        .filter((l) => /かもしれ|とされ|と言われ|可能性|確からし/.test(l.textContent)).length,
+    }));
+    record('託宣', '託宣が出て、行数と根拠の数が一致する',
+      r.lines >= 10 && r.title && r.proof === r.lines,
+      `${r.lines}行 / 根拠 ${r.proof}件`);
+    record('託宣', '一行残らず出典を持っている', r.unsourced === 0, `出典なし ${r.unsourced}`);
+    record('託宣', '断りは入口に一度だけで、本文には混ぜない',
+      r.oath === 1 && r.hedgeInside === 0,
+      `入口の断り ${r.oath}箇所、本文中のためらい ${r.hedgeInside}箇所`);
+    record('託宣', 'ページエラーが無い', errors.length === 0, errors.slice(0, 2).join(' | '));
     await ctx.close();
   }
 

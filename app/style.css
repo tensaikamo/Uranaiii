@@ -928,6 +928,149 @@ tr.dominant td, tr.dominant th { color: var(--ink); }
 .output > *:nth-child(4) { animation-delay: 150ms; }
 .output > *:nth-child(n+5) { animation-delay: 190ms; }
 
+/* --- 生まれた場所 ----------------------------------------------------------
+ *
+ * The suggestion list is absolutely positioned so it does not push the form
+ * around as somebody types — a field that reflows under the thumb on every
+ * keystroke is worse than no suggestions.
+ */
+
+.place-field { position: relative; }
+.place-box { position: relative; }
+.place-list {
+  position: absolute;
+  z-index: 5;
+  left: 0;
+  right: 0;
+  top: calc(100% + 2px);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 232px;
+  overflow-y: auto;
+  background: #0C1420;
+  border: 1px solid var(--brass-dim);
+  border-radius: 2px;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.55);
+}
+.place-item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  min-height: 44px;
+  cursor: pointer;
+  border-top: 1px solid var(--rule);
+}
+.place-item:first-child { border-top: none; }
+.place-item.is-active { background: rgba(201, 169, 97, 0.12); }
+.place-name { font-family: var(--mincho); font-size: 14.5px; color: var(--ink); }
+.place-lon { font-family: var(--mono); font-size: 11px; color: var(--ink-faint); white-space: nowrap; }
+.place-note { transition: color 200ms ease; }
+
+/* --- 託宣 -------------------------------------------------------------------
+ *
+ * The other two pages are built to be scanned. This one is built to be read at
+ * the speed it is spoken, so almost everything here is about slowing the eye
+ * down: one column, long line-height, mincho throughout, and nothing competing
+ * with the words.
+ */
+
+.tabs {
+  max-width: 480px;
+  margin: 0 auto 4px;
+  display: flex;
+  gap: 2px;
+}
+.tabs a {
+  flex: 1 1 0;
+  padding: 9px 4px;
+  text-align: center;
+  font-family: var(--mincho);
+  font-size: 14px;
+  letter-spacing: 0.18em;
+  text-indent: 0.18em;
+  color: var(--ink-dim);
+  text-decoration: none;
+  border-bottom: 1px solid var(--rule);
+}
+.tabs a[aria-current="page"] {
+  color: #F2E9D6;
+  border-bottom-color: var(--brass);
+}
+
+/* The caution, once, at the entrance. */
+.oath {
+  max-width: 480px;
+  margin: 18px auto 0;
+  padding: 16px 17px;
+  border-left: 2px solid var(--brass-dim);
+  background: rgba(201, 169, 97, 0.05);
+}
+.oath p { margin: 0 0 9px; font-size: 12.5px; line-height: 1.9; color: var(--ink-dim); }
+.oath p:last-child { margin-bottom: 0; }
+.oath strong { color: var(--ink); font-weight: 400; }
+.oath a { color: var(--brass); }
+.oath-close { color: var(--ink-faint) !important; }
+
+.scroll { margin-top: 30px; }
+
+/* The eight characters, stated and not explained. */
+.seal {
+  margin: 0 0 30px;
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+  font-family: var(--mincho);
+  font-size: 15px;
+  letter-spacing: 0.1em;
+  color: var(--brass);
+  opacity: 0.7;
+}
+
+.oracle-line {
+  margin: 0 0 26px;
+  font-family: var(--mincho);
+  font-size: 16px;
+  line-height: 2.25;
+  color: var(--ink);
+  letter-spacing: 0.03em;
+}
+.oracle-line.is-title {
+  margin: 0 0 34px;
+  font-size: 30px;
+  line-height: 1.5;
+  letter-spacing: 0.14em;
+  text-align: center;
+  font-weight: 400;
+  background: linear-gradient(180deg, #FBF2DE 0%, var(--brass) 72%, #96773A 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+/* The lines the reading turns on. Weight and a rule, not colour — the five
+   element hues mean something specific everywhere else in this app. */
+.oracle-line.is-strong {
+  font-size: 19px;
+  color: #F6EBD2;
+  padding-left: 14px;
+  border-left: 2px solid var(--brass);
+}
+.oracle-line.is-close {
+  margin-top: 40px;
+  padding-top: 26px;
+  border-top: 1px solid var(--rule);
+  font-size: 15px;
+  color: var(--ink-dim);
+}
+
+.proof { margin-top: 44px; }
+.proof-list { margin: 12px 0 0; padding: 0; list-style: none; }
+.proof-item { padding: 9px 0; border-top: 1px solid var(--rule); }
+.proof-text { margin: 0; font-size: 12.5px; line-height: 1.8; color: var(--ink-dim); }
+.proof .reading-source { margin-top: 5px; }
+
 /* --- 図: 命式・五行・大運 --------------------------------------------------
  *
  * Three rules hold across all three figures, and they came out of running the
@@ -1202,6 +1345,9 @@ tr.dominant td, tr.dominant th { color: var(--ink); }
 
 @media (prefers-reduced-motion: no-preference) {
   .gauge-fill { animation: gauge-grow 620ms cubic-bezier(.2,.8,.25,1) both; }
+  /* A reading is spoken, and speech has pacing. The delay carries no
+     information — under reduced motion every line is simply already there. */
+  .oracle-line.is-timed { animation: oracle-speak 900ms ease-out both; }
   /* The 生 ring and the 剋 star draw themselves in, in that order, because that
      is the order the diagram is read. Motion is never the only carrier: the
      figure is complete and correct the instant it stops. */
@@ -1224,6 +1370,10 @@ tr.dominant td, tr.dominant th { color: var(--ink); }
 @keyframes wx-fade {
   from { opacity: 0; }
   to { opacity: 0.85; }
+}
+@keyframes oracle-speak {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
 }
 @keyframes wx-pop {
   from { opacity: 0; transform: scale(0.7); }
@@ -1254,6 +1404,7 @@ tr.dominant td, tr.dominant th { color: var(--ink); }
   .output > * { animation: none; }
   .gauge-fill { animation: none; }
   .wx-sheng, .wx-ke, .wx-node, .band-cell, .board-col { animation: none; }
+  .oracle-line { animation: none; }
 }
 @media (prefers-reduced-motion: no-preference) {
   .hand { transition: transform 750ms cubic-bezier(.2,.8,.25,1); }

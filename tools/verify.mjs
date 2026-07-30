@@ -25,6 +25,8 @@ import { hiddenStems, hiddenTable, TRIADS, NO_MIDDLE } from '../app/engine/hidde
 import { tenGod, tenGodOf, chartTenGods, godGroups, GOD_GROUP, TEN_GOD_PLAIN, GROUP_PLAIN } from '../app/engine/tenGods.js';
 import { timeline, summariseTimeline } from '../app/engine/timeline.js';
 import { annualYears } from '../app/ui/luckband.js';
+import { oracleStatements } from '../app/engine/oracle.js';
+import { PLACES, findPlaces } from '../app/engine/places.js';
 import { speak } from '../app/engine/voice.js';
 import { judgeStrength, judgeBoth } from '../app/engine/strength.js';
 import { gauges, dayStemInDoubt, SCORE_SCALE } from '../app/engine/gauges.js';
@@ -37,6 +39,35 @@ import { japanOffsetHours, japanNow } from '../app/engine/time.js';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const results = [];
 let failures = 0;
+
+// The pages, discovered rather than listed.
+//
+// Four checks below used to carry their own hand-written copy of "the pages"
+// — `['index.html', 'voice.html']` and `['app/main.js', 'app/voice-main.js']`.
+// Adding 託宣 broke all four at once, in the two ways a stale list can break:
+// the dead-CSS check *failed*, reporting eight live oracle classes as orphans
+// because it never read `oracle-main.js`; the other three *passed* without
+// ever looking at the new page, which is the worse failure — a green check
+// that measures nothing.
+//
+// So the list is derived from the repository. Every `.html` at the root is a
+// page, and each page names its own entry script in the module tag it already
+// carries. That relationship is real; a table copied into four places is a
+// promise to keep four places in sync, and this repository has now failed that
+// promise once.
+const PAGES = readdirSync(ROOT)
+  .filter((f) => f.endsWith('.html'))
+  .sort()
+  .map((html) => {
+    const source = readFileSync(join(ROOT, html), 'utf8');
+    const tag = source.match(/<script\s+type="module"\s+src="([^"]+)"/);
+    return { html, entry: tag ? tag[1] : null, source };
+  });
+
+/** Every page and every page's entry script, as one blob to scan. */
+const pageSources = () => PAGES.map((p) => p.source)
+  .concat(PAGES.filter((p) => p.entry).map((p) => readFileSync(join(ROOT, p.entry), 'utf8')))
+  .join('\n');
 
 function record(section, name, passed, detail) {
   results.push({ section, name, passed, detail });
@@ -1152,22 +1183,21 @@ const DAY_PILLARS = [
 
   // A7 — latitude is not asked for anywhere, because nothing uses it.
   {
-    const files = ['index.html', 'voice.html', 'app/main.js', 'app/voice-main.js'];
+    const files = PAGES.map((p) => p.html).concat(PAGES.map((p) => p.entry).filter(Boolean));
     const hits = files.filter((f) => readFileSync(join(ROOT, f), 'utf8').includes('latitude'));
     record('伝え方', '使わない緯度を入力欄に置いていない', hits.length === 0,
-      hits.length === 0 ? '4ファイルすべてに latitude が無い' : `残っている: ${hits.join(', ')}`);
+      hits.length === 0 ? `${files.length}ファイルすべてに latitude が無い`
+        : `残っている: ${hits.join(', ')}`);
   }
 
   // A3 — the date field cannot offer a birth that has not happened.
   {
-    const guards = ['index.html', 'voice.html'].every((f) => {
-      const html = readFileSync(join(ROOT, f), 'utf8');
-      return /id="birthdate"/.test(html);
-    });
-    const capped = ['app/main.js', 'app/voice-main.js'].every((f) =>
-      readFileSync(join(ROOT, f), 'utf8').includes('japanNow'));
-    record('伝え方', '未来の生年月日を弾く仕掛けが両ページにある', guards && capped,
-      '両ページが japanNow() で max を今日に切り下げ、送信時にも検査する');
+    const missing = PAGES.filter((p) => !/id="birthdate"/.test(p.source)
+      || !p.entry || !readFileSync(join(ROOT, p.entry), 'utf8').includes('japanNow'));
+    record('伝え方', '未来の生年月日を弾く仕掛けが全ページにある', missing.length === 0,
+      missing.length === 0
+        ? `${PAGES.length}ページとも japanNow() で max を今日に切り下げ、送信時にも検査する`
+        : `欠けている: ${missing.map((p) => p.html).join(', ')}`);
   }
 }
 
@@ -1292,15 +1322,15 @@ const DAY_PILLARS = [
     relativeScope,
     manifest ? `scope=${manifest.scope} start_url=${manifest.start_url} display=${manifest.display}` : '—');
 
-  // Both pages have to link the manifest, or the one that does not is the one
-  // that bounces out.
-  const linked = ['index.html', 'voice.html'].filter((f) => {
-    const html = readFileSync(join(ROOT, f), 'utf8');
-    return /rel="manifest"/.test(html) && /apple-touch-icon/.test(html)
-      && /apple-mobile-web-app-capable/.test(html);
-  });
-  record('ホーム画面', '両ページが manifest とアイコンを宣言している',
-    linked.length === 2, `${linked.join(', ')}`);
+  // Every page has to link the manifest. The one that does not is the one that
+  // bounces the reader out of the app and into Safari mid-session.
+  const unlinked = PAGES.filter((p) => !(/rel="manifest"/.test(p.source)
+    && /apple-touch-icon/.test(p.source)
+    && /apple-mobile-web-app-capable/.test(p.source)));
+  record('ホーム画面', '全ページが manifest とアイコンを宣言している',
+    unlinked.length === 0,
+    unlinked.length === 0 ? PAGES.map((p) => p.html).join(', ')
+      : `宣言が無い: ${unlinked.map((p) => p.html).join(', ')}`);
 
   // A declared icon that is not there is worse than no icon: iOS silently falls
   // back to a screenshot of the page.
@@ -1376,15 +1406,17 @@ const DAY_PILLARS = [
   // being served to every reader. Swapping the 命式 string for the board figure
   // and taking the element hue off the band bars orphaned nine rules; nothing
   // noticed until they were looked for by hand.
+  // The scan reads every page, every page's entry script, and every module. It
+  // used to name the entry scripts by hand, and the moment a third page arrived
+  // it called that page's own live classes dead — training the reader to skip
+  // the one check whose whole job is to be believed.
   const css = readFileSync(join(ROOT, 'app/style.css'), 'utf8');
-  const source = ['app/main.js', 'app/voice-main.js']
-    .concat(readdirSync(join(ROOT, 'app/engine')).map((f) => `app/engine/${f}`))
+  const source = readdirSync(join(ROOT, 'app/engine')).map((f) => `app/engine/${f}`)
     .concat(readdirSync(join(ROOT, 'app/ui')).map((f) => `app/ui/${f}`))
     .filter((f) => f.endsWith('.js'))
     .map((f) => readFileSync(join(ROOT, f), 'utf8'))
     .join('\n')
-    + readFileSync(join(ROOT, 'index.html'), 'utf8')
-    + readFileSync(join(ROOT, 'voice.html'), 'utf8');
+    + pageSources();
 
   // Class names the stylesheet defines, minus the ones that exist only to be
   // composed by CSS itself (state modifiers are applied via template strings the
@@ -1429,6 +1461,88 @@ const DAY_PILLARS = [
       `立運 ${luck.onset.years}歳${luck.onset.months}ヶ月 → 大運前 ${before.length}年、`
       + `帯は ${rows[0].age}歳から ${rows[rows.length - 1].age}歳まで連続`);
   }
+}
+
+// --- 託宣と、生まれた場所 ------------------------------------------------------
+{
+  // The oracle drops the hedging. It does not drop the sourcing — that is the
+  // whole distinction between "a register" and "made up", and it is the one
+  // thing on that page worth checking mechanically.
+  let seed = 8823;
+  const rnd = (a, b) => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return a + (seed % (b - a + 1)); };
+  let unsourced = 0;
+  let empty = 0;
+  const keys = new Set();
+  const shapes = new Set();
+  for (let i = 0; i < 1500; i += 1) {
+    const input = {
+      year: rnd(1930, 2010), month: rnd(1, 12), day: rnd(1, 28), hour: rnd(0, 23), minute: rnd(0, 59),
+      precision: rnd(0, 9) === 0 ? 'unknown' : 'pm5', longitude: 122 + rnd(0, 3200) / 100,
+      sex: rnd(0, 1) === 0 ? 'male' : 'female',
+    };
+    const chart = buildChart(input, DEFAULT_AXES);
+    const strength = judgeBoth(chart.pillars);
+    const lines = oracleStatements(chart, strength, { luckFit: 'needed' });
+    if (lines.length === 0) empty += 1;
+    for (const l of lines) {
+      if (!l.text || !l.source || l.source.length === 0 || !l.key) unsourced += 1;
+      keys.add(l.key);
+    }
+    shapes.add(lines.map((l) => l.key).join('|'));
+  }
+  record('託宣', '一行残らず出典を持ち、空の託宣が出ない',
+    unsourced === 0 && empty === 0,
+    `1,500命式、出典なし ${unsourced}行、空 ${empty}件、キー ${keys.size}種、組み合わせ ${shapes.size}通り`);
+
+  // Determinism: an oracle that varied between readings of the same birth would
+  // be theatre, and would also make every measured frequency meaningless.
+  const fixed = { year: 1990, month: 6, day: 15, hour: 6, minute: 30, precision: 'pm5', longitude: 141.77, sex: 'male' };
+  const c1 = buildChart(fixed, DEFAULT_AXES);
+  const say = () => oracleStatements(c1, judgeBoth(c1.pillars), { luckFit: 'avoided' }).map((l) => l.text).join('|');
+  record('託宣', '同じ生まれは何度でも同じことを言う', say() === say(),
+    `${oracleStatements(c1, judgeBoth(c1.pillars), { luckFit: 'avoided' }).length} 行が一致`);
+
+  // The line this page will not cross: no hedging inside the reading, because
+  // the caution is stated once at the entrance instead.
+  const HEDGE = /かもしれ|とされ|と言われ|可能性|確からし|一般に/;
+  const hedged = [...keys].filter((k) => false).length; // keys carry no prose
+  const proseHedged = oracleStatements(c1, judgeBoth(c1.pillars), { luckFit: 'avoided' })
+    .filter((l) => HEDGE.test(l.text)).length;
+  record('託宣', '本文にためらいの言葉を混ぜない（断りは入口に一度だけ）',
+    proseHedged === 0 && hedged === 0, `ためらい ${proseHedged} 箇所`);
+
+  // 生まれた場所 — the table exists so the app can offer a place box without a
+  // request. Its numbers have to be inside Japan and inside what the form takes.
+  const outside = PLACES.filter(([, , , lon, lat]) => lon < 122 || lon > 154 || lat < 20 || lat > 46);
+  record('生まれた場所', '同梱の市区町村表が日本の範囲に収まっている',
+    outside.length === 0 && PLACES.length > 1500,
+    `${PLACES.length} 市区町村、範囲外 ${outside.length} 件`);
+
+  // Known values, so a refreshed source cannot quietly move the country.
+  const KNOWN = [['岩見沢市', 141.78], ['千代田区', 139.75], ['那覇市', 127.68], ['根室市', 145.58]];
+  const off = KNOWN.filter(([name, expect]) => {
+    const hit = findPlaces(name, 1)[0];
+    return !hit || Math.abs(hit.lon - expect) > 0.15;
+  });
+  record('生まれた場所', '既知の市の経度が公表値と合う（4分角以内）',
+    off.length === 0,
+    KNOWN.map(([n, e]) => {
+      const h = findPlaces(n, 1)[0];
+      return `${n} ${h ? h.lon : '—'}(${e})`;
+    }).join(' '));
+
+  // Hiragana in, katakana table: without the conversion the box finds nothing
+  // for the way people actually type on a phone.
+  record('生まれた場所', 'ひらがなで引ける（表はカタカナ）',
+    findPlaces('さっぽろ', 1).length === 1 && findPlaces('いわみざわ', 1)[0].city === '岩見沢市',
+    `さっぽろ→${(findPlaces('さっぽろ', 1)[0] || {}).city}、いわみざわ→${(findPlaces('いわみざわ', 1)[0] || {}).city}`);
+
+  // The form's step once rejected the table's third decimal, and an invalid
+  // field makes a form refuse to submit without saying anything.
+  const steps = PAGES.map((p) => (p.source.match(/id="longitude"[^>]*step="([^"]+)"/) || [])[1]);
+  record('生まれた場所', '経度の欄が表の小数桁を受け付ける',
+    steps.every((s) => s === 'any'),
+    `${PAGES.length}ページとも step=${[...new Set(steps)].join('/')}（表は小数3桁）`);
 }
 
 // --- report -----------------------------------------------------------------

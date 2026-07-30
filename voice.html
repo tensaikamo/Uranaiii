@@ -30,6 +30,12 @@
   <p class="subtitle">生年月日から、あなたのことを</p>
 </header>
 
+<nav class="tabs" aria-label="ページ">
+  <a href="index.html">盤</a>
+  <a href="voice.html" aria-current="page">語り</a>
+  <a href="oracle.html">託宣</a>
+</nav>
+
 <main>
   <!--
     The register change is stated up front, not buried. The board page destroys
@@ -84,7 +90,7 @@
 
     <div class="field">
       <label for="longitude">東経</label>
-      <input type="number" id="longitude" value="141.79" min="122" max="154" step="0.01" inputmode="decimal" required>
+      <input type="number" id="longitude" value="141.79" min="122" max="154" step="any" inputmode="decimal" required>
     </div>
     <p class="hint">
       経度だけで足ります。真太陽時のずれは経度で決まるので、緯度は命式に効きません。

@@ -18,12 +18,16 @@ import { buildDial, updateDial } from './ui/dial.js';
 import { startSky } from './ui/sky.js';
 import { clockHour } from './engine/pillars.js';
 import { japanNow } from './engine/time.js';
+import { attachPlaceField } from './ui/placefield.js';
 
 const boot = document.getElementById('boot');
 const form = document.getElementById('form');
 const output = document.getElementById('output');
 
 startSky(document.getElementById('sky'));
+
+// 生まれた場所から経度を引く。表は同梱なので、通信は発生しない。
+attachPlaceField();
 
 const state = {
   precision: 'pm5',

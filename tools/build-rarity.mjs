@@ -22,6 +22,7 @@ import { buildChart, DEFAULT_AXES } from '../app/engine/chart.js';
 import { rawStatements } from '../app/engine/reading.js';
 import { voiceStatements } from '../app/engine/voice.js';
 import { domainStatements } from '../app/engine/domains.js';
+import { oracleStatements } from '../app/engine/oracle.js';
 import { judgeBoth } from '../app/engine/strength.js';
 import { luckPeriods, cycleAtAge, ageExact } from '../app/engine/luck.js';
 import { julianDay } from '../app/engine/swe.js';
@@ -94,6 +95,7 @@ for (let i = 0; i < SAMPLES; i += 1) {
     ...rawStatements(chart).map((s) => s.key),
     ...voiceStatements(chart, nowJdUt, input).map((s) => s.key),
     ...domainStatements(chart, strength, { luckFit: luckNow(chart, strength, input) }).map((s) => s.key),
+    ...oracleStatements(chart, strength, { luckFit: luckNow(chart, strength, input) }).map((s) => s.key),
   ]);
   for (const key of seen) counts.set(key, (counts.get(key) || 0) + 1);
 }
