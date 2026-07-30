@@ -1,0 +1,28 @@
+{
+  "name": "命式 — 四柱推命エンジン",
+  "short_name": "命式",
+  "description": "生年月日時と経度から命式を立て、計算の中身と出典を全部見せる四柱推命。",
+  "lang": "ja",
+  "dir": "ltr",
+  "scope": "./",
+  "start_url": "./",
+  "id": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#070C14",
+  "background_color": "#070C14",
+  "categories": ["lifestyle", "entertainment", "utilities"],
+  "icons": [
+    { "src": "app/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "app/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "app/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    {
+      "name": "語り",
+      "short_name": "語り",
+      "description": "人物評・助言・年運のあるページ",
+      "url": "./voice.html"
+    }
+  ]
+}

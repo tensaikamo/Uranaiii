@@ -424,10 +424,37 @@ MBTI 式の伝え方を入れたあと、穴とバグを探して10件見つけ�
 1800年と2399年の両端、閏日、1948〜51年の夏時刻、時刻不明の三柱、経度や時刻が NaN の
 とき、名前の前後空白・濁点・サロゲートペア・かな。
 
+## ホーム画面に置く（PWA）
+
+ホーム画面に追加してページを切り替えると Safari に戻ってしまう、という不具合が
+あった。**原因はマニフェストが無かったこと。** iOS はスコープを知らないので、
+フッターのリンクを踏んだ時点で「アプリの外」と判断していた。
+
+- `manifest.webmanifest` — `scope` と `start_url` は **相対（`./`）**。GitHub Pages は
+  サブパス配信なので、絶対パスの `/` にするとサイト全体がアプリの外になる
+- アイコン一式（以前は1枚も無く、ホーム画面のアイコンはページのスクショだった）。
+  絵柄は天盤と同じ 羅盤 の語彙で、`tools/build-icons.mjs` が同梱の Chromium で
+  ラスタライズする。PNG は生成物としてコミットする（`strokes.js`・`rarity.js` と同じ扱い）
+- `apple-touch-icon` と `apple-mobile-web-app-*`。iOS はステータスバーと名前について
+  マニフェストではなくこちらを読む
+- **Service Worker でオフライン動作**。app shell と天体暦（`.se1` は `swisseph.data` に
+  同梱されている）を含む38ファイル・3.44MB を先読みする
+
+**先読み一覧は手で書かない。** モジュールを1つ足して worker を再生成し忘れると、
+オフラインで白画面になる——「入れられない」より悪い壊れ方をする。`tools/build-sw.mjs` が
+ディスク上の実ファイルから一覧を作り、`verify.mjs` が作り直して突き合わせる。
+版は中身のハッシュなので、再生成漏れも検出できる。
+
+**「初回ロード後は通信ゼロ」は弱まらない。** worker が返すのは同一オリジンの、
+既に持っているバイトだけ。むしろ強くなる——**2回目以降の表示はネットワーク要求が
+実測0件**になった。検算も主張に合わせて書き直した:
+外部オリジンへの要求は常にゼロ／どの要求にも入力値が乗らない／同一オリジンの
+通信はアプリ自身のファイルだけ。
+
 ## 検算
 
 ```
-node tools/verify.mjs              # 89項目。VERIFY.md を生成する
+node tools/verify.mjs              # 97項目。VERIFY.md を生成する
 node tools/reading-metrics.mjs     # 組み合わせ数・上限到達率、バーナム文の検出
 node tools/build-rarity.mjs 20000 2026-07-30   # 各文の出現頻度を測り rarity.js を生成
 ```
@@ -462,6 +489,8 @@ node tools/build-rarity.mjs 20000 2026-07-30   # 各文の出現頻度を測り 
 ```
 index.html          盤
 voice.html          語り
+manifest.webmanifest  ホーム画面用（scope は相対）
+sw.js               オフライン用（生成物）
 app/
   engine/
     swe.js          Swiss Ephemeris の束縛。UT系のみを公開する
@@ -481,6 +510,7 @@ app/
     strokes.js      画数表（生成物・KANJIDIC2 由来）
     plainwords.js   表示テキストの語彙。専門語を今の日本語に開く
     tenGods.js      通変星（十神）。五行の関係×陰陽から機械的に決まる
+  icons/            ホーム画面アイコン（生成物）
     gauges.js       目盛り4本。計算済みの値を位置として見せる（新しい判断はしない）
     domains.js      仕事／人づきあい・恋愛／お金／心と体への投影。箇条書き
   voice-main.js
@@ -492,10 +522,12 @@ app/
   style.css
 vendor/swisseph-wasm/   同梱の天体暦（GPL）
 tools/
-  verify.mjs           検算（89項目）
+  verify.mjs           検算（97項目）
   reading-metrics.mjs  組み合わせ数・上限到達率
   build-rarity.mjs     出現頻度の実測
   build-strokes.mjs    KANJIDIC2 から画数表を生成
+  build-icons.mjs      ホーム画面アイコンを生成（同梱 Chromium でラスタライズ）
+  build-sw.mjs         Service Worker の先読み一覧を実ファイルから生成
 VERIFY.md
 ```
 

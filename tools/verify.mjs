@@ -6,7 +6,8 @@
  * passed by accident.
  */
 
-import { readFileSync, readdirSync, writeFileSync, statSync } from 'node:fs';
+import { readFileSync, readdirSync, writeFileSync, statSync, existsSync } from 'node:fs';
+import { cacheList, cacheVersion } from './build-sw.mjs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -1264,6 +1265,105 @@ const DAY_PILLARS = [
       `四柱 ${a.length}箇所 / 三柱 ${b.length}箇所、グループ合計 ${total}: `
       + a.map((e) => `${e.position}${e.god}`).join(' '));
   }
+}
+
+// --- ホーム画面とオフライン（PWA） -------------------------------------------
+//
+// The complaint this answers: added to the home screen, tapping through to the
+// other page dropped back into Safari. iOS decides that from the manifest's
+// scope, so the checks are about the manifest actually being there, actually
+// covering both pages, and the icons it promises actually existing.
+{
+  const manifestRaw = readFileSync(join(ROOT, 'manifest.webmanifest'), 'utf8');
+  let manifest = null;
+  let parseError = '';
+  try { manifest = JSON.parse(manifestRaw); } catch (error) { parseError = error.message; }
+
+  record('ホーム画面', 'manifest.webmanifest が妥当な JSON',
+    manifest !== null, manifest ? `${Object.keys(manifest).length} キー` : parseError);
+
+  // Relative, because GitHub Pages serves this from /Uranaiii/ and an absolute
+  // "/" scope would put the whole site outside the app.
+  const relativeScope = manifest
+    && manifest.scope === './' && manifest.start_url === './'
+    && manifest.display === 'standalone';
+  record('ホーム画面', 'スコープが相対で、standalone を宣言している',
+    relativeScope,
+    manifest ? `scope=${manifest.scope} start_url=${manifest.start_url} display=${manifest.display}` : '—');
+
+  // Both pages have to link the manifest, or the one that does not is the one
+  // that bounces out.
+  const linked = ['index.html', 'voice.html'].filter((f) => {
+    const html = readFileSync(join(ROOT, f), 'utf8');
+    return /rel="manifest"/.test(html) && /apple-touch-icon/.test(html)
+      && /apple-mobile-web-app-capable/.test(html);
+  });
+  record('ホーム画面', '両ページが manifest とアイコンを宣言している',
+    linked.length === 2, `${linked.join(', ')}`);
+
+  // A declared icon that is not there is worse than no icon: iOS silently falls
+  // back to a screenshot of the page.
+  const iconProblems = [];
+  for (const icon of (manifest ? manifest.icons : [])) {
+    const path = join(ROOT, icon.src);
+    if (!existsSync(path)) { iconProblems.push(`${icon.src} が無い`); continue; }
+    const buf = readFileSync(path);
+    // PNG: width and height are big-endian 32-bit at byte 16 of the IHDR.
+    const width = buf.readUInt32BE(16);
+    const height = buf.readUInt32BE(20);
+    const [declaredW, declaredH] = icon.sizes.split('x').map(Number);
+    if (width !== declaredW || height !== declaredH) {
+      iconProblems.push(`${icon.src} は ${width}x${height}（宣言は ${icon.sizes}）`);
+    }
+  }
+  const appleIcon = join(ROOT, 'app/icons/apple-touch-icon.png');
+  if (!existsSync(appleIcon)) iconProblems.push('apple-touch-icon.png が無い');
+  record('ホーム画面', '宣言したアイコンが実在し、寸法も宣言どおり',
+    iconProblems.length === 0,
+    iconProblems.length === 0
+      ? `${manifest.icons.length}枚 ＋ apple-touch-icon、すべて実寸一致`
+      : iconProblems.join(' / '));
+
+  record('ホーム画面', 'maskable アイコンを持っている（Android の切り抜き対策）',
+    manifest !== null && manifest.icons.some((i) => (i.purpose || '').includes('maskable')),
+    manifest ? manifest.icons.map((i) => `${i.sizes}:${i.purpose}`).join(' ') : '—');
+
+  // Offline is only real if the precache list is complete. One missing module
+  // is a blank screen with the network off, which is worse than not installing
+  // at all — so the list is re-derived from disk and compared.
+  const sw = readFileSync(join(ROOT, 'sw.js'), 'utf8');
+  const listed = JSON.parse(sw.match(/const FILES = (\[[\s\S]*?\]);/)[1]);
+  const expected = cacheList();
+  const missing = expected.filter((f) => !listed.includes(f));
+  const extra = listed.filter((f) => !expected.includes(f));
+  record('オフライン', 'キャッシュ一覧がディスク上のファイルと一致する',
+    missing.length === 0 && extra.length === 0,
+    missing.length === 0 && extra.length === 0
+      ? `${listed.length}ファイル、漏れも余りも無し`
+      : `漏れ ${missing.slice(0, 3).join(', ')} / 余り ${extra.slice(0, 3).join(', ')}`);
+
+  // Every module the app imports has to be in that list. This catches a new
+  // engine file that nobody remembered to regenerate the worker for.
+  const imported = new Set();
+  const scan = (dir) => {
+    for (const name of readdirSync(join(ROOT, dir))) {
+      const rel = `${dir}/${name}`;
+      if (statSync(join(ROOT, rel)).isDirectory()) scan(rel);
+      else if (name.endsWith('.js')) imported.add(rel);
+    }
+  };
+  scan('app');
+  const uncached = [...imported].filter((f) => !listed.includes(f));
+  record('オフライン', 'app/ の全モジュールがキャッシュ対象に入っている',
+    uncached.length === 0,
+    uncached.length === 0 ? `${imported.size}モジュール` : `未キャッシュ: ${uncached.join(', ')}`);
+
+  // The version has to move when the bytes move, or a reader keeps being served
+  // yesterday's app from cache forever.
+  const declaredVersion = (sw.match(/const VERSION = '([^']+)'/) || [])[1];
+  record('オフライン', 'キャッシュ版が中身のハッシュと一致している（再生成漏れの検出）',
+    declaredVersion === cacheVersion(expected),
+    `sw.js=${declaredVersion} / いまのディスク=${cacheVersion(expected)}`);
 }
 
 // --- report -----------------------------------------------------------------
