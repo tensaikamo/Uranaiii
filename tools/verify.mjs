@@ -984,6 +984,43 @@ const DAY_PILLARS = [
     `${seenKeys.size} 種のキーのうち、頻度が無いもの ${missingFreq.length} 件`
     + `${missingFreq.length ? `: ${missingFreq.slice(0, 4).join(', ')}` : ''}`);
 
+  // The material base, guarded by measurement.
+  //
+  // The bullets are a projection of computed facts, and how many *distinct*
+  // readings they can produce is a property of how many facts they look at. With
+  // four materials it was 978 — a saturating number, meaning a thousand readers
+  // included two who got identical advice. Wiring in the branches, the dominant
+  // element and the 大運 the engine already computed took it past 4,000 without
+  // a single new calculation.
+  //
+  // The floor is set below the measured value, not at it: this is here to catch
+  // a change that quietly stops the bullets looking at something, not to break
+  // whenever the sample wobbles.
+  {
+    const combos = new Set();
+    const charts = new Set();
+    let s2 = 24601;
+    const r2 = (a, b) => { s2 = (s2 * 1103515245 + 12345) & 0x7fffffff; return a + (s2 % (b - a + 1)); };
+    const at = new Date('2026-07-30T03:00:00Z');
+    for (let i = 0; i < 4000; i += 1) {
+      const input = {
+        year: r2(1930, 2010), month: r2(1, 12), day: r2(1, 28), hour: r2(0, 23), minute: r2(0, 59),
+        precision: 'pm5', longitude: 122 + r2(0, 3200) / 100, sex: r2(0, 1) === 0 ? 'male' : 'female',
+      };
+      const c = buildChart(input, DEFAULT_AXES);
+      const st = judgeBoth(c.pillars);
+      const lk = luckPeriods(c, st, input.sex);
+      const cyc = lk ? cycleAtAge(lk, ageExact(input, at)) : null;
+      charts.add(c.signature);
+      combos.add(domainStatements(c, st, { luckFit: cyc ? cyc.fit : null })
+        .map((b) => b.source.join(',')).sort().join('|'));
+    }
+    const reach = combos.size / charts.size;
+    record('伝え方', '場面ごとの箇条書きが十分な材料を見ている',
+      reach >= 0.75,
+      `4,000命式中 異なる命式 ${charts.size} に対し 箇条書き ${combos.size} 通り（到達率 ${(reach * 100).toFixed(1)}%、下限75%）`);
+  }
+
   // 決定論: the same birth must always produce the same page. A rotation or a
   // random pick would read as variety and destroy the frequency claims.
   const fixed = { year: 1990, month: 6, day: 15, hour: 6, minute: 30, precision: 'pm5', longitude: 141.77, sex: 'male' };

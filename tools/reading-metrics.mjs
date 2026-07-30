@@ -30,8 +30,11 @@ import { buildChart, DEFAULT_AXES } from '../app/engine/chart.js';
 import { readChart, readingSignature, RULES } from '../app/engine/reading.js';
 import { domainStatements } from '../app/engine/domains.js';
 import { judgeBoth } from '../app/engine/strength.js';
+import { luckPeriods, cycleAtAge, ageExact } from '../app/engine/luck.js';
 
 const SAMPLES = Number(process.argv[2]) || 1000;
+// Pinned so the 大運 material is measured against a stated day, like rarity.js.
+const NOW = new Date('2026-07-30T03:00:00Z');
 
 await initEphemeris();
 
@@ -84,7 +87,10 @@ for (let i = 0; i < SAMPLES; i += 1) {
   // The delivery layer is measured separately. These are the lines a reader
   // actually reads first, so they are the ones most able to feel personal while
   // being true of everybody — the exact failure this file exists to catch.
-  const bullets = domainStatements(chart, judgeBoth(chart.pillars));
+  const st = judgeBoth(chart.pillars);
+  const lk = luckPeriods(chart, st, input.sex);
+  const cyc = lk ? cycleAtAge(lk, ageExact(input, NOW)) : null;
+  const bullets = domainStatements(chart, st, { luckFit: cyc ? cyc.fit : null });
   bulletTotal += bullets.length;
   for (const b of bullets) {
     if (!Array.isArray(b.source) || b.source.length === 0) unsourced += 1;

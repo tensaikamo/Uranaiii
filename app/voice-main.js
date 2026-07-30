@@ -343,7 +343,9 @@ function render(input) {
       lead.append(citations(note));
       output.append(lead);
     }
-    const scenes = domainBullets(chart, s);
+    // The decade the reader is standing in, when a sex was given — 大運 needs it,
+    // and without it the section simply loses that line rather than guessing.
+    const scenes = domainBullets(chart, s, { luckFit: v.luck && v.luck.current ? v.luck.current.fit : null });
     for (const { key, label } of DOMAINS) {
       const scene = scenes[key];
       if (!scene || scene.bullets.length === 0) continue;

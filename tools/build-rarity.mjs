@@ -23,6 +23,7 @@ import { rawStatements } from '../app/engine/reading.js';
 import { voiceStatements } from '../app/engine/voice.js';
 import { domainStatements } from '../app/engine/domains.js';
 import { judgeBoth } from '../app/engine/strength.js';
+import { luckPeriods, cycleAtAge, ageExact } from '../app/engine/luck.js';
 import { julianDay } from '../app/engine/swe.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -57,6 +58,13 @@ const rnd = (a, b) => {
   return a + (seed % (b - a + 1));
 };
 
+/** The 大運 the reader stands in today — one of the per-scene bullet's materials. */
+function luckNow(chart, strength, input) {
+  const luck = luckPeriods(chart, strength, input.sex);
+  const cycle = luck ? cycleAtAge(luck, ageExact(input, now)) : null;
+  return cycle ? cycle.fit : null;
+}
+
 const counts = new Map();
 
 for (let i = 0; i < SAMPLES; i += 1) {
@@ -67,6 +75,7 @@ for (let i = 0; i < SAMPLES; i += 1) {
     sex: rnd(0, 1) === 0 ? 'male' : 'female',
   };
   const chart = buildChart(input, DEFAULT_AXES);
+  const strength = judgeBoth(chart.pillars);
 
   // A chart counts once per distinct key, not once per statement, so a rule
   // that fires twice on one chart does not inflate its own frequency.
@@ -78,7 +87,7 @@ for (let i = 0; i < SAMPLES; i += 1) {
   const seen = new Set([
     ...rawStatements(chart).map((s) => s.key),
     ...voiceStatements(chart, nowJdUt, input).map((s) => s.key),
-    ...domainStatements(chart, judgeBoth(chart.pillars)).map((s) => s.key),
+    ...domainStatements(chart, strength, { luckFit: luckNow(chart, strength, input) }).map((s) => s.key),
   ]);
   for (const key of seen) counts.set(key, (counts.get(key) || 0) + 1);
 }
