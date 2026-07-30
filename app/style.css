@@ -949,6 +949,148 @@ tr.dominant td, tr.dominant th { color: var(--ink); }
 .output > *:nth-child(4) { animation-delay: 150ms; }
 .output > *:nth-child(n+5) { animation-delay: 190ms; }
 
+/* --- 図: 命式・五行・大運 --------------------------------------------------
+ *
+ * Three rules hold across all three figures, and they came out of running the
+ * palette through a validator rather than out of taste:
+ *
+ *   1. The five element hues carry **identity only**. A separate green/red pair
+ *      for 追い風/向かい風 measured ΔE 4.4 against 木 and 火 — under the floor of
+ *      15, so a full-colour reader could not tell them apart. Polarity therefore
+ *      gets position (above/below the centre line) and a mark (▲▼), never a hue.
+ *   2. Identity is never colour-alone. Every coloured mark is a 干支 glyph or
+ *      carries its name beside it — which is also what lets 金 stay
+ *      near-achromatic, as 金 should be.
+ *   3. Text wears text tokens. The one exception is a glyph that *is* the datum.
+ */
+
+.el-bg-wood  { fill: var(--el-wood); }
+.el-bg-fire  { fill: var(--el-fire); }
+.el-bg-earth { fill: var(--el-earth); }
+.el-bg-metal { fill: var(--el-metal); }
+.el-bg-water { fill: var(--el-water); }
+
+/* --- 命式の図 --- */
+
+.board-fig { margin: 20px 0 0; }
+.board-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 2px; /* the surface gap that separates touching marks */
+}
+.board-col {
+  padding: 10px 2px 9px;
+  background: rgba(18, 27, 40, 0.5);
+  border-radius: 3px;
+  text-align: center;
+  min-width: 0;
+}
+/* 日柱 is the reader; the board is read from it outward. */
+.board-col.is-self { box-shadow: inset 0 0 0 1px var(--brass-dim); }
+.board-pos {
+  font-size: 9.5px;
+  letter-spacing: 0.2em;
+  color: var(--brass);
+  opacity: 0.8;
+}
+.board-cell { margin-top: 6px; }
+.board-glyph {
+  display: block;
+  font-family: var(--mincho);
+  font-size: 30px;
+  line-height: 1.15;
+}
+.board-god.is-self { color: var(--brass); }
+.board-god {
+  display: block;
+  margin-top: 1px;
+  font-size: 9.5px;
+  letter-spacing: 0.04em;
+  color: var(--ink-dim);
+}
+.board-hidden {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--rule);
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+}
+.board-hid { font-family: var(--mincho); font-size: 12px; color: var(--ink-faint); }
+.board-hid.is-main { color: var(--ink); }
+.board-empty {
+  font-family: var(--mincho);
+  font-size: 30px;
+  color: var(--ink-faint);
+  padding: 14px 0 21px;
+}
+.board-governs { margin-top: 7px; font-size: 9.5px; line-height: 1.5; color: var(--ink-faint); }
+.board-caption, .wuxing-caption, .band-caption {
+  margin: 9px 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  font-size: 10.5px;
+  color: var(--ink-faint);
+  line-height: 1.6;
+}
+
+/* --- 五行の図 --- */
+
+.wuxing-fig { margin: 18px 0 0; }
+.wuxing { display: block; width: 100%; max-width: 320px; margin: 0 auto; height: auto; }
+.wx-sheng, .wx-ke { fill: none; }
+.wx-sheng { stroke: var(--brass-dim); stroke-width: 2; }
+.wx-ke { stroke: var(--ink-faint); stroke-width: 1.5; stroke-dasharray: 3 4; opacity: 0.85; }
+.wx-head { fill: var(--brass-dim); }
+.wx-head.is-ke { fill: var(--ink-faint); }
+.wx-disc { fill: currentColor; opacity: 0.9; }
+.wx-node.is-empty .wx-disc { fill: none; stroke: currentColor; stroke-width: 1.5; opacity: 0.45; }
+/* 用神 gets a ring — a mark, because the hues are spoken for. */
+.wx-halo { fill: none; stroke: #FBF2DE; stroke-width: 1.5; opacity: 0.85; }
+.wx-label {
+  font-family: var(--mincho);
+  font-size: 17px;
+  fill: var(--ground);
+  paint-order: stroke;
+}
+.wx-node.is-empty .wx-label { fill: var(--ink-dim); }
+.wx-count { font-family: var(--mono); font-size: 10px; fill: var(--ink-dim); }
+.wx-node:focus-visible { outline: none; }
+.wx-node:focus-visible .wx-disc { stroke: #FBF2DE; stroke-width: 2; }
+.wx-key.is-sheng::before,
+.wx-key.is-ke::before {
+  content: "";
+  display: inline-block;
+  width: 14px;
+  height: 0;
+  margin-right: 5px;
+  vertical-align: middle;
+}
+.wx-key.is-sheng::before { border-top: 2px solid var(--brass-dim); }
+.wx-key.is-ke::before { border-top: 1.5px dashed var(--ink-faint); }
+
+/* --- 大運と流年の帯 --- */
+
+.band-fig { margin: 16px 0 0; }
+.band-scroll { overflow-x: auto; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; }
+.band { display: block; height: 104px; min-width: 100%; }
+.band-axis { stroke: var(--rule-strong); stroke-width: 1; }
+.band-sep { stroke: var(--rule); stroke-width: 1; }
+.band-decade { font-family: var(--mincho); font-size: 10px; fill: var(--ink-dim); }
+/* One hue for every bar: polarity is position, and a large field of a
+   categorical hue would be read as status no matter what the legend says. */
+.band-bar { fill: var(--brass); opacity: 0.62; }
+.band-cell.is-neutral .band-bar { fill: var(--ink-faint); opacity: 0.75; }
+.band-cell.is-now .band-bar { opacity: 1; }
+.band-age { font-family: var(--mono); font-size: 8.5px; fill: var(--ink-faint); }
+.band-cell:focus-visible { outline: none; }
+.band-cell:focus-visible .band-bar { stroke: #FBF2DE; stroke-width: 2; }
+.band-now { stroke: #FBF2DE; stroke-width: 1.5; opacity: 0.9; }
+.band-now-tag { font-size: 9px; letter-spacing: 0.1em; fill: #FBF2DE; }
+.band-key.is-needed { color: var(--ink-dim); }
+.band-key.is-avoided { color: var(--ink-dim); }
+
 /* --- 目盛り: the chart as four positions ---------------------------------- */
 
 .gauge { margin: 0 0 20px; }
@@ -1088,6 +1230,42 @@ tr.dominant td, tr.dominant th { color: var(--ink); }
 
 @media (prefers-reduced-motion: no-preference) {
   .gauge-fill { animation: gauge-grow 620ms cubic-bezier(.2,.8,.25,1) both; }
+  /* The 生 ring and the 剋 star draw themselves in, in that order, because that
+     is the order the diagram is read. Motion is never the only carrier: the
+     figure is complete and correct the instant it stops. */
+  .wx-sheng { animation: wx-draw 900ms ease-out both; }
+  /* The 剋 lines are dashed to distinguish them from the 生 arcs, so they cannot
+     be drawn in by animating stroke-dasharray — that overwrites the pattern and
+     they arrive solid. They fade instead, and keep their dashes. */
+  .wx-ke { animation: wx-fade 700ms 320ms ease-out both; }
+  .wx-node { animation: wx-pop 460ms 420ms cubic-bezier(.2,.9,.3,1.2) both; }
+  .band-cell { animation: band-rise 520ms cubic-bezier(.2,.8,.25,1) both; }
+  .board-col { animation: board-in 460ms cubic-bezier(.2,.8,.25,1) both; }
+  .board-col:nth-child(2) { animation-delay: 60ms; }
+  .board-col:nth-child(3) { animation-delay: 120ms; }
+  .board-col:nth-child(4) { animation-delay: 180ms; }
+}
+@keyframes wx-draw {
+  from { stroke-dasharray: 0 260; }
+  to { stroke-dasharray: 260 0; }
+}
+@keyframes wx-fade {
+  from { opacity: 0; }
+  to { opacity: 0.85; }
+}
+@keyframes wx-pop {
+  from { opacity: 0; transform: scale(0.7); }
+  to { opacity: 1; transform: scale(1); }
+}
+.wx-node { transform-box: fill-box; transform-origin: center; }
+@keyframes band-rise {
+  from { opacity: 0; transform: scaleY(0.1); }
+  to { opacity: 1; transform: scaleY(1); }
+}
+.band-cell { transform-box: fill-box; transform-origin: center; }
+@keyframes board-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
 }
 @keyframes gauge-grow {
   from { transform: scaleX(0); }
@@ -1103,6 +1281,7 @@ tr.dominant td, tr.dominant th { color: var(--ink); }
   .glyph.is-leaving, .glyph.is-entering { animation: none; }
   .output > * { animation: none; }
   .gauge-fill { animation: none; }
+  .wx-sheng, .wx-ke, .wx-node, .band-cell, .board-col { animation: none; }
 }
 @media (prefers-reduced-motion: no-preference) {
   .hand { transition: transform 750ms cubic-bezier(.2,.8,.25,1); }

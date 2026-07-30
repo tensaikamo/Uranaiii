@@ -24,6 +24,10 @@ import { gauges, dayStemInDoubt } from './engine/gauges.js';
 import { resolveUncertainty } from './engine/uncertainty.js';
 import { domainBullets, needAbsentNote, summaryCards, DOMAINS } from './engine/domains.js';
 import { chartTenGods, TEN_GOD_PLAIN } from './engine/tenGods.js';
+import { buildBoardFigure } from './ui/board.js';
+import { buildWuxingFigure } from './ui/wuxing.js';
+import { buildLuckBand } from './ui/luckband.js';
+import { elementBalance } from './engine/pillars.js';
 import { FIT_LABEL } from './engine/timeline.js';
 import { frequencyOf, RARITY_SAMPLES } from './engine/rarity.js';
 import { el } from './ui/render.js';
@@ -300,16 +304,22 @@ function render(input) {
   }
   output.append(hero);
 
-  /* --- the board, small --- */
-  const strip = el('div', 'voice-strip');
-  for (const [key, label] of [['year', '年'], ['month', '月'], ['day', '日'], ['hour', '時']]) {
-    const p = chart.pillars[key];
-    const cell = el('div', 'voice-cell');
-    cell.append(el('span', 'voice-cell-label', label));
-    cell.append(el('span', 'voice-cell-text', p ? p.text : '—'));
-    strip.append(cell);
+  /* --- 命式 — the most important object on the page, drawn as a board --- */
+  output.append(buildBoardFigure(chart));
+
+  /* --- 五行 — counts, and how the five act on each other --- */
+  {
+    const section = el('section', 'section');
+    section.append(el('h2', 'plain-h2', '五行のめぐり'));
+    section.append(el('p', 'voice-lead',
+      '8文字がどの五行に散っているかと、その五行どうしの関係です。'
+      + '外まわりが「生む」、内側が「抑える」。'));
+    const { counts, sources } = elementBalance(chart.pillars);
+    section.append(buildWuxingFigure(counts, {
+      needed: s.needed, avoided: s.avoided, sources,
+    }));
+    output.append(section);
   }
-  output.append(strip);
 
   /* --- 4本の目盛り: the chart as four positions ------------------------- */
   {
@@ -462,6 +472,15 @@ function render(input) {
   /* --- 大運: the timeline ------------------------------------------------ */
   if (v.luck) {
     const section = passage(v.luck);
+    // The band first — a life is not lived in ten-year blocks, and the 流年
+    // inside each 大運 is a real layer of the reading, not a decoration.
+    section.insertBefore(
+      buildLuckBand(v.luck.luck, s, {
+        birthYear: chart.pillars.solarYear,
+        nowAge: v.luck.age,
+      }),
+      section.querySelector('.gloss') || section.querySelector('.reading-source'),
+    );
     const list = el('div', 'luck');
     for (const p of v.luck.luck.periods) {
       const row = el('div', `luck-row is-${p.fit}${p === v.luck.current ? ' is-now' : ''}`);
