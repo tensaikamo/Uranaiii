@@ -12,7 +12,7 @@
  * changing with them — the version is a hash of their contents.
  */
 
-const VERSION = 'd792f6d9db9b';
+const VERSION = 'd8fd86cffc95';
 const CACHE = `meishiki-${VERSION}`;
 
 const FILES = [
@@ -29,7 +29,9 @@ const FILES = [
   "app/engine/domains.js",
   "app/engine/gauges.js",
   "app/engine/hidden.js",
+  "app/engine/kyusei.js",
   "app/engine/luck.js",
+  "app/engine/lunar.js",
   "app/engine/name.js",
   "app/engine/oracle.js",
   "app/engine/pillars.js",
@@ -37,6 +39,7 @@ const FILES = [
   "app/engine/plainwords.js",
   "app/engine/rarity.js",
   "app/engine/reading.js",
+  "app/engine/shukuyo.js",
   "app/engine/strength.js",
   "app/engine/strokes.js",
   "app/engine/swe.js",

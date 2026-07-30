@@ -26,6 +26,10 @@ import { tenGod, tenGodOf, chartTenGods, godGroups, GOD_GROUP, TEN_GOD_PLAIN, GR
 import { timeline, summariseTimeline } from '../app/engine/timeline.js';
 import { annualYears } from '../app/ui/luckband.js';
 import { oracleStatements } from '../app/engine/oracle.js';
+import { newMoonAtOrBefore, newMoonAfter, elongation, mansionWindow, mansionIndex, moonSidereal, MANSION_SPAN } from '../app/engine/lunar.js';
+import { shukuyo, MANSIONS } from '../app/engine/shukuyo.js';
+import { honmei, getsumei, kyusei, STARS } from '../app/engine/kyusei.js';
+import { moonCrossing, ayanamsa } from '../app/engine/swe.js';
 import { PLACES, findPlaces } from '../app/engine/places.js';
 import { speak } from '../app/engine/voice.js';
 import { judgeStrength, judgeBoth } from '../app/engine/strength.js';
@@ -33,7 +37,7 @@ import { gauges, dayStemInDoubt, SCORE_SCALE } from '../app/engine/gauges.js';
 import { domainBullets, summaryCards, domainStatements, DOMAINS, MAX_PER_DOMAIN, ROOTED_AT } from '../app/engine/domains.js';
 import { frequencyOf } from '../app/engine/rarity.js';
 import { trueTermPeriod, meanTermPeriod, degreesSinceRisshun, termPeriod, termIngresses, SETSU } from '../app/engine/terms.js';
-import { computePillars, TIGER_MONTH_STEM, RAT_HOUR_STEM, DAY_PILLAR_OFFSET, pillarFromIndex, STEMS, BRANCHES, STEM_ELEMENT } from '../app/engine/pillars.js';
+import { computePillars, TIGER_MONTH_STEM, RAT_HOUR_STEM, DAY_PILLAR_OFFSET, pillarFromIndex, STEMS, BRANCHES, STEM_ELEMENT, ELEMENTS } from '../app/engine/pillars.js';
 import { japanOffsetHours, japanNow } from '../app/engine/time.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -206,7 +210,12 @@ for (const [year, rows] of Object.entries(NAOJ)) {
       const src = readFileSync(path, 'utf8');
       for (const [i, line] of src.split('\n').entries()) {
         const code = line.replace(/\/\/.*$/, '').replace(/^\s*\*.*$/, '');
-        if (/\bswe_calc\s*\(|\bswe_solcross\s*\(|\.calc\s*\(|\.solcross\s*\(/.test(code)) {
+        // Every one of these has a _ut twin. Adding the Moon and the sidereal
+        // systems made four more ET-based entry points reachable, so the guard
+        // grew with them — a guard that only knows the calls that existed when
+        // it was written stops being a guard the moment anything is added.
+        if (/\bswe_(calc|solcross|mooncross|get_ayanamsa|mooncross_node)\s*\(/.test(code)
+          || /\.(calc|solcross|mooncross|get_ayanamsa|mooncross_node)\s*\(/.test(code)) {
           offenders.push(`${path.replace(ROOT + '/', '')}:${i + 1}`);
         }
       }
@@ -1395,6 +1404,268 @@ const DAY_PILLARS = [
   record('オフライン', 'キャッシュ版が中身のハッシュと一致している（再生成漏れの検出）',
     declaredVersion === cacheVersion(expected),
     `sw.js=${declaredVersion} / いまのディスク=${cacheVersion(expected)}`);
+}
+
+// --- 朔と月 -----------------------------------------------------------------
+//
+// The lunar substrate everything Moon-based sits on. Checked against an
+// independent published algorithm, not against itself.
+{
+  // Meeus, *Astronomical Algorithms* ch. 49 — the new-moon series, implemented
+  // here from the book rather than imported, so that agreement means two
+  // different methods agree. Swiss Ephemeris integrates an ephemeris; this is a
+  // truncated trigonometric series. They share no code and no data.
+  //
+  // The planetary perturbation terms are omitted, which is worth about 15
+  // seconds; the tolerance below is set well outside that and well inside the
+  // error that any real mistake would produce.
+  const RAD = Math.PI / 180;
+  function meeusNewMoon(k) {
+    const T = k / 1236.85;
+    const T2 = T * T;
+    const T3 = T2 * T;
+    const T4 = T3 * T;
+    let jde = 2451550.09766 + 29.530588861 * k
+      + 0.00015437 * T2 - 0.000000150 * T3 + 0.00000000073 * T4;
+    const E = 1 - 0.002516 * T - 0.0000074 * T2;
+    const M = (2.5534 + 29.10535670 * k - 0.0000014 * T2 - 0.00000011 * T3) * RAD;
+    const M1 = (201.5643 + 385.81693528 * k + 0.0107582 * T2
+      + 0.00001238 * T3 - 0.000000058 * T4) * RAD;
+    const F = (160.7108 + 390.67050284 * k - 0.0016118 * T2
+      - 0.00000227 * T3 + 0.000000011 * T4) * RAD;
+    const O = (124.7746 - 1.56375588 * k + 0.0020672 * T2 + 0.00000215 * T3) * RAD;
+    jde += -0.40720 * Math.sin(M1)
+      + 0.17241 * E * Math.sin(M)
+      + 0.01608 * Math.sin(2 * M1)
+      + 0.01039 * Math.sin(2 * F)
+      + 0.00739 * E * Math.sin(M1 - M)
+      - 0.00514 * E * Math.sin(M1 + M)
+      + 0.00208 * E * E * Math.sin(2 * M)
+      - 0.00111 * Math.sin(M1 - 2 * F)
+      - 0.00057 * Math.sin(M1 + 2 * F)
+      + 0.00056 * E * Math.sin(2 * M1 + M)
+      - 0.00042 * Math.sin(3 * M1)
+      + 0.00042 * E * Math.sin(M + 2 * F)
+      + 0.00038 * E * Math.sin(M - 2 * F)
+      - 0.00024 * E * Math.sin(2 * M1 - M)
+      - 0.00017 * Math.sin(O)
+      - 0.00007 * Math.sin(M1 + 2 * M)
+      + 0.00004 * Math.sin(2 * M1 - 2 * F)
+      + 0.00004 * Math.sin(3 * M)
+      + 0.00003 * Math.sin(M1 + M - 2 * F)
+      + 0.00003 * Math.sin(2 * M1 + 2 * F)
+      - 0.00003 * Math.sin(M1 + M + 2 * F)
+      + 0.00003 * Math.sin(M1 - M + 2 * F)
+      - 0.00002 * Math.sin(M1 - M - 2 * F)
+      - 0.00002 * Math.sin(3 * M1 + M)
+      + 0.00002 * Math.sin(4 * M1);
+
+    // The fourteen planetary arguments. Dropping them was worth up to 72
+    // seconds, measured — which is larger than a real defect in the search
+    // would have to be before this check could see it. A tolerance loose enough
+    // to absorb my own truncation is a tolerance that no longer tests anything,
+    // so the terms are here instead.
+    const A = [
+      [299.77 + 0.107408 * k - 0.009173 * T2, 0.000325],
+      [251.88 + 0.016321 * k, 0.000165],
+      [251.83 + 26.651886 * k, 0.000164],
+      [349.42 + 36.412478 * k, 0.000126],
+      [84.66 + 18.206239 * k, 0.000110],
+      [141.74 + 53.303771 * k, 0.000062],
+      [207.14 + 2.453732 * k, 0.000060],
+      [154.84 + 7.306860 * k, 0.000056],
+      [34.52 + 27.261239 * k, 0.000047],
+      [207.19 + 0.121824 * k, 0.000042],
+      [291.34 + 1.844379 * k, 0.000040],
+      [161.72 + 24.198154 * k, 0.000037],
+      [239.56 + 25.513099 * k, 0.000035],
+      [331.55 + 3.592518 * k, 0.000023],
+    ];
+    for (const [deg, coefficient] of A) jde += coefficient * Math.sin(deg * RAD);
+
+    // The series is in TT; the app works in UT throughout.
+    return jde - deltaTSeconds(jde) / 86400;
+  }
+
+  let worstMeeus = 0;
+  let worstAt = '';
+  for (let k = -2000; k <= 3300; k += 37) {
+    const published = meeusNewMoon(k);
+    const found = newMoonAtOrBefore(published + 1);
+    const delta = Math.abs(found - published) * 86400;
+    if (delta > worstMeeus) { worstMeeus = delta; worstAt = jstString(published); }
+  }
+  record('朔', '朔の探索が Meeus の独立した級数と一致する（144回）',
+    worstMeeus < 40,
+    `最大差 ${worstMeeus.toFixed(1)}秒（${worstAt} 付近）。`
+      + '級数側は打ち切り誤差を持つので、これは両者の差であって探索の誤差ではない');
+
+  // The root itself: at the returned instant the Moon and Sun must share a
+  // longitude. This is what "朔" means, and it is checked directly rather than
+  // inferred from the search having terminated.
+  let worstElongation = 0;
+  let ageProblems = 0;
+  const gaps = [];
+  let previous = null;
+  for (let i = 0; i < 400; i += 1) {
+    const jd = julianDay(1800 + Math.floor(i * 1.4), (i % 12) + 1, (i % 28) + 1, (i % 24));
+    const nm = newMoonAtOrBefore(jd);
+    if (nm === null) { ageProblems += 1; continue; }
+    worstElongation = Math.max(worstElongation, Math.abs(elongation(nm)));
+    const age = jd - nm;
+    if (!(age >= 0 && age < 29.85)) ageProblems += 1;
+    if (previous !== null && nm > previous) gaps.push(nm - previous);
+    previous = nm;
+  }
+  record('朔', '朔の瞬間に太陽と月の黄経が実際に一致し、月齢が朔望月に収まる',
+    worstElongation < 1e-5 && ageProblems === 0,
+    `離角の最大 ${worstElongation.toExponential(2)}°、月齢が範囲外だった回数 ${ageProblems}/400`);
+
+  // The synodic month is not constant — it runs between about 29.27 and 29.83
+  // days. A search that silently returned the same lunation twice, or skipped
+  // one, would show up here as a spacing outside that range.
+  let spacingOk = 0;
+  let spacingBad = 0;
+  let start = julianDay(1990, 1, 1, 0);
+  for (let i = 0; i < 200; i += 1) {
+    const next = newMoonAfter(start);
+    const gap = next - newMoonAtOrBefore(start + 0.001);
+    if (gap > 29.26 && gap < 29.84) spacingOk += 1; else spacingBad += 1;
+    start = next;
+  }
+  record('朔', '連続する朔の間隔が朔望月の実際の変動範囲に収まる',
+    spacingBad === 0,
+    `200朔連続、すべて 29.26〜29.84日（${spacingOk}件）。平均朔望月 29.5306日は使わず実測`);
+}
+
+// --- 宿曜 -------------------------------------------------------------------
+{
+  // The classifier and the boundary search share one definition of sidereal
+  // longitude, so they cannot disagree by construction. That makes an
+  // *independent* confirmation worth having: swe_mooncross_ut solves the same
+  // crossing from the tropical side. The two definitions differ by about 13″
+  // of ecliptic projection, which at lunar speed is around half a minute — so
+  // agreement to a minute confirms the search, and a real error (a wrong
+  // ayanāṃśa, an off-by-one division) would be tens of minutes or hours.
+  let worstCross = 0;
+  let containsBirth = 0;
+  let edgeCorrect = 0;
+  const samples = 300;
+  let s = 424242;
+  const rnd = (a, b) => { s = (s * 1103515245 + 12345) & 0x7fffffff; return a + s % (b - a + 1); };
+  for (let i = 0; i < samples; i += 1) {
+    const jd = julianDay(rnd(1800, 2399), rnd(1, 12), rnd(1, 28), rnd(0, 23) + rnd(0, 59) / 60);
+    const w = mansionWindow(jd);
+    if (w.start <= jd && jd <= w.end) containsBirth += 1;
+    // A second either side of each edge must fall in this mansion and not in it.
+    const inside = Math.floor(moonSidereal(w.start + 1e-5) / MANSION_SPAN) === w.index
+      && Math.floor(moonSidereal(w.end - 1e-5) / MANSION_SPAN) === w.index;
+    if (inside) edgeCorrect += 1;
+    const target = (((w.index + 1) * MANSION_SPAN + ayanamsa(w.end)) % 360 + 360) % 360;
+    worstCross = Math.max(worstCross, Math.abs(moonCrossing(target, w.end - 0.6) - w.end) * 86400);
+  }
+  record('宿曜', '宿の境界が swe_mooncross_ut と一致する',
+    worstCross < 60,
+    `300命式、最大差 ${worstCross.toFixed(1)}秒。サイデリアル定義の差13″が約24秒に相当する`);
+  record('宿曜', '宿の区間が誕生の瞬間を含み、両端がその宿の内側にある',
+    containsBirth === samples && edgeCorrect === samples,
+    `含む ${containsBirth}/${samples}、両端が正しい宿 ${edgeCorrect}/${samples}`);
+
+  // 27 equal divisions of a circle the Moon sweeps evenly, so no mansion may be
+  // rare. A rotation error or an off-by-one in the division would show as a
+  // hole or a doubled bin rather than as a wrong name nobody can check.
+  const counts = new Array(27).fill(0);
+  const N = 5400;
+  for (let i = 0; i < N; i += 1) {
+    counts[mansionIndex(julianDay(1900 + rnd(0, 199), rnd(1, 12), rnd(1, 28), rnd(0, 23)))] += 1;
+  }
+  const expected = N / 27;
+  // 4σ on a binomial with p = 1/27; a genuine hole or double is far outside.
+  const sigma = Math.sqrt(N * (1 / 27) * (26 / 27));
+  const strays = counts.filter((c) => Math.abs(c - expected) > 4 * sigma).length;
+  record('宿曜', '27宿すべてが同じ割合で出る（欠けも重なりも無い）',
+    strays === 0 && counts.every((c) => c > 0),
+    `${N}命式、期待 ${expected.toFixed(0)}／実測 ${Math.min(...counts)}〜${Math.max(...counts)}、4σ超 ${strays}件`);
+
+  record('宿曜', '27宿の名前が過不足なく揃っている',
+    MANSIONS.length === 27 && new Set(MANSIONS.map((m) => m.name)).size === 27
+      && MANSIONS.every((m) => m.plain && m.kana),
+    `${MANSIONS.length}宿、重複なし、全宿に読みと説明がある`);
+
+  // The claim the whole design rests on: a record that does not determine the
+  // mansion is reported as not determining it. Measured, not asserted.
+  let straddle30 = 0;
+  let straddleUnknown = 0;
+  const M = 1200;
+  for (let i = 0; i < M; i += 1) {
+    const jd = julianDay(rnd(1900, 2050), rnd(1, 12), rnd(1, 28), rnd(0, 23) + rnd(0, 59) / 60);
+    if (shukuyo(jd, 30).state !== 'determinate') straddle30 += 1;
+    if (shukuyo(jd, null).state !== 'determinate') straddleUnknown += 1;
+  }
+  const fractions = shukuyo(julianDay(1990, 6, 15, 3.5), null).spread
+    .reduce((a, b) => a + b.fraction, 0);
+  record('宿曜', '境界にまたがる記録が、またがると報告される',
+    straddle30 > 0 && straddleUnknown > M * 0.8 && Math.abs(fractions - 1) < 1e-9,
+    `±30分で ${(straddle30 / M * 100).toFixed(1)}%、時刻不明で ${(straddleUnknown / M * 100).toFixed(1)}% が2宿にまたがる`
+      + `（月は1宿を約22時間で通るので、丸一日の窓はほぼ必ずまたぐ）。分割の合計=${fractions.toFixed(6)}`);
+}
+
+// --- 九星気学 ---------------------------------------------------------------
+//
+// Two rules, both checked as arithmetic rather than against a copied table.
+{
+  // The anchor. 2022 is the 五黄土星 year people name; every other year in the
+  // system follows from it by the descent below, so this single published fact
+  // pins the whole phase.
+  record('九星気学', '本命星の位相が公表された年（2022年＝五黄土星）に合う',
+    STARS[honmei(2022)].name === '五黄土星',
+    `2022→${STARS[honmei(2022)].name}、2026→${STARS[honmei(2026)].name}`);
+
+  let yearBreaks = 0;
+  for (let y = 1800; y < 2399; y += 1) {
+    if (((honmei(y) - honmei(y + 1)) % 9 + 9) % 9 !== 1) yearBreaks += 1;
+  }
+  record('九星気学', '本命星が毎年きっかり1つずつ下る',
+    yearBreaks === 0, `1800〜2399年の599回、例外 ${yearBreaks}件`);
+
+  // The month rule is normally given as a 3×12 table. It is not a table: it is
+  // the same descent continued monthly, and this proves it — including across
+  // the 立春 boundary, where the table's three groups are supposed to take over.
+  // If the group anchors were mistyped the descent would break exactly there.
+  let monthBreaks = 0;
+  let acrossYear = 0;
+  for (let y = 1900; y < 2100; y += 1) {
+    for (let b = 0; b < 12; b += 1) {
+      const branch = (2 + b) % 12;
+      const nextBranch = (2 + b + 1) % 12;
+      const nextYear = b === 11 ? y + 1 : y;
+      const step = ((getsumei(y, branch) - getsumei(nextYear, nextBranch)) % 9 + 9) % 9;
+      if (step !== 1) { monthBreaks += 1; if (b === 11) acrossYear += 1; }
+    }
+  }
+  record('九星気学', '月命星も節月ごとに1つずつ下る（立春をまたいでも切れない）',
+    monthBreaks === 0,
+    `1900〜2099年の2,400回、例外 ${monthBreaks}件（うち年またぎ ${acrossYear}件）。`
+      + '三群の表は、この連続した下りの位相にすぎない');
+
+  // The reason this system is here at all: the year turns at 立春, computed
+  // from the ephemeris, not on 1 January and not on a nominal 4 February.
+  const before = buildChart({ year: 1990, month: 2, day: 3, hour: 12, minute: 0, precision: 'pm5', longitude: 135 }, DEFAULT_AXES);
+  const after = buildChart({ year: 1990, month: 2, day: 4, hour: 12, minute: 0, precision: 'pm5', longitude: 135 }, DEFAULT_AXES);
+  const kb = kyusei(before);
+  const ka = kyusei(after);
+  record('九星気学', '本命星が立春で切り替わる（暦の1月1日ではない）',
+    kb.year.name !== ka.year.name && kb.solarYear === 1989 && ka.solarYear === 1990,
+    `1990-02-03 は ${kb.year.name}（立春年${kb.solarYear}）、02-04 は ${ka.year.name}（立春年${ka.solarYear}）`);
+
+  // 五行 is the seam through which this system can be compared with the 命式.
+  // If a star carried an element outside the five, the agreement layer would
+  // silently never match it.
+  const badElement = STARS.slice(1).filter((s) => !ELEMENTS.includes(s.element));
+  record('九星気学', '九星すべてが命式と同じ五行の語彙を持つ',
+    badElement.length === 0 && STARS.slice(1).length === 9
+      && STARS.slice(1).every((s) => s.plain),
+    `9星すべてに五行と説明がある（${STARS.slice(1).map((s) => s.element).join(',')}）`);
 }
 
 // --- 図と CSS の後始末 --------------------------------------------------------
