@@ -21,6 +21,7 @@
  */
 
 import { createServer } from 'node:http';
+import { readdirSync } from 'node:fs';
 import { readFile, stat } from 'node:fs/promises';
 import { join, dirname, extname, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -51,6 +52,17 @@ const MIME = {
  * the shape it actually ships in is the point.
  */
 const PREFIX = '/Uranaiii';
+
+/**
+ * The pages, discovered rather than listed.
+ *
+ * verify.mjs had four checks carrying hand-written copies of "the pages", and
+ * adding a third page broke all four at once — one loudly, three by quietly
+ * passing without ever looking at the new page. The same three lists were in
+ * here. Adding 重ね would have left the browser audit reporting 54/54 while
+ * never once opening it, which is the worse half of that failure repeated.
+ */
+const PAGES = readdirSync(ROOT).filter((f) => f.endsWith('.html')).sort();
 
 function startServer() {
   const server = createServer(async (req, res) => {
@@ -123,7 +135,7 @@ async function main() {
 
   /* --- privacy, storage, layout, errors, figures ---------------------------- */
 
-  for (const page of ['voice.html', 'index.html', 'oracle.html']) {
+  for (const page of PAGES) {
     const ctx = await browser.newContext({ viewport: { width: 375, height: 812 }, deviceScaleFactor: 2 });
     const tab = await ctx.newPage();
     const errors = [];
@@ -216,7 +228,7 @@ async function main() {
   // decimals while the input allowed two, so the auto-filled longitude was
   // invalid and the browser refused to submit *silently*: the button did nothing
   // and said nothing.
-  for (const page of ['index.html', 'voice.html', 'oracle.html']) {
+  for (const page of PAGES) {
     const ctx = await browser.newContext({ viewport: { width: 375, height: 812 } });
     const tab = await ctx.newPage();
     await tab.goto(`${BASE}/${page}`, { waitUntil: 'networkidle' });
@@ -250,9 +262,21 @@ async function main() {
     await tab.click('button[type=submit]');
     await tab.waitForSelector('#output:not([hidden])', { timeout: 30000 });
     await tab.waitForTimeout(800);
-    const cast2 = await tab.evaluate(() => !!(document.querySelector('.chart')
-      || document.querySelector('.gauge') || document.querySelector('.oracle-line')));
-    record('生まれた場所', `${page}: 引いた経度でそのまま占える`, cast2);
+    // Page-agnostic, deliberately. This used to look for .chart, .gauge or
+    // .oracle-line — a list of one selector per page that existed at the time,
+    // so a fourth page failed the check by rendering its own markup correctly.
+    // What the check actually means is "the form cast and produced a reading
+    // rather than an error", and .notice is how every page reports refusing.
+    const cast2 = await tab.evaluate(() => {
+      const out = document.getElementById('output');
+      return {
+        children: out ? out.children.length : 0,
+        refused: out ? out.querySelectorAll('.notice').length : 0,
+      };
+    });
+    record('生まれた場所', `${page}: 引いた経度でそのまま占える`,
+      cast2.children > 0 && cast2.refused === 0,
+      `出力 ${cast2.children}要素、拒否メッセージ ${cast2.refused}件`);
     await ctx.close();
   }
 
@@ -354,7 +378,7 @@ async function main() {
 
   /* --- 未来の日付を二重に弾く ---------------------------------------------- */
 
-  for (const page of ['voice.html', 'index.html']) {
+  for (const page of PAGES) {
     const ctx = await browser.newContext({ viewport: { width: 375, height: 812 } });
     const tab = await ctx.newPage();
     await tab.goto(`${BASE}/${page}`, { waitUntil: 'networkidle' });
@@ -449,6 +473,76 @@ async function main() {
     record('オフライン', '通信を切ってもページ間を移動して計算まで通る', voiceOffline === 4,
       `目盛り ${voiceOffline} 本`);
     await ctx.setOffline(false);
+    await ctx.close();
+  }
+
+  /* --- 重ね: the refusals, in a real browser ------------------------------- */
+  //
+  // The two things this page promises are both *absences*, and an absence is
+  // exactly what a unit test is worst at noticing: it passes whether the field
+  // was withheld deliberately or the code silently threw on the way to it.
+  {
+    const ctx = await browser.newContext({ viewport: { width: 375, height: 812 } });
+    const tab = await ctx.newPage();
+    const errors = [];
+    tab.on('pageerror', (e) => errors.push(String(e)));
+    await tab.goto(`${BASE}/layers.html`, { waitUntil: 'networkidle' });
+    await tab.waitForSelector('#form:not([hidden])', { timeout: 60000 });
+
+    // 1. Latitude blank: the ascendant is withheld with a reason, and every
+    //    other system still answers.
+    await tab.fill('#birthdate', '1990-06-15');
+    await tab.fill('#birthtime', '06:30');
+    await tab.fill('#latitude', '');
+    await tab.click('button[type=submit]');
+    await tab.waitForSelector('#output:not([hidden])', { timeout: 30000 });
+    await tab.waitForTimeout(500);
+    const noLat = await tab.evaluate(() => ({
+      absent: document.querySelectorAll('.layer-absent').length,
+      values: document.querySelectorAll('.layer-value').length,
+      refused: document.querySelectorAll('#output .notice').length,
+      mentionsAsc: (document.querySelector('.layer-absent') || {}).textContent || '',
+    }));
+    record('重ね', '緯度が空なら、アセンダントだけが理由つきで欠ける',
+      noLat.absent === 1 && noLat.values > 4 && noLat.refused === 0
+        && noLat.mentionsAsc.includes('緯度'),
+      `欠落 ${noLat.absent}件、ほかの答え ${noLat.values}件、エラー ${noLat.refused}件`);
+
+    // 2. No birth time: no ascendant at all, and 宿曜 reports straddling rather
+    //    than picking one. This is the claim no other tool makes.
+    await tab.fill('#latitude', '43.20');
+    await tab.fill('#birthtime', '');
+    await tab.click('button[type=submit]');
+    await tab.waitForSelector('#output:not([hidden])', { timeout: 30000 });
+    await tab.waitForTimeout(500);
+    const noTime = await tab.evaluate(() => ({
+      absent: (document.querySelector('.layer-absent') || {}).textContent || '',
+      shares: document.querySelectorAll('.layer-share').length,
+      refused: document.querySelectorAll('#output .notice').length,
+    }));
+    record('重ね', '時刻が無ければアセンダントを出さず、宿曜は2宿にまたがると言う',
+      noTime.absent.includes('時刻') && noTime.shares >= 2 && noTime.refused === 0,
+      `宿の分割 ${noTime.shares}件`);
+
+    // 3. Every agreement shown carries its chance rate and its lift. The page's
+    //    one rule: no agreement may be stated uncalibrated.
+    await tab.fill('#birthtime', '06:30');
+    await tab.click('button[type=submit]');
+    await tab.waitForSelector('#output:not([hidden])', { timeout: 30000 });
+    await tab.waitForTimeout(500);
+    const agree = await tab.evaluate(() => {
+      const rows = [...document.querySelectorAll('.agreement')];
+      return {
+        rows: rows.length,
+        calibrated: rows.filter((r) => r.querySelector('.agreement-null')
+          && r.querySelector('.agreement-lift') && r.querySelector('.agreement-verdict')).length,
+      };
+    });
+    record('重ね', '示した一致すべてに「無関係なら」と倍率が付いている',
+      agree.rows === agree.calibrated,
+      `一致 ${agree.rows}件、うち偶然率つき ${agree.calibrated}件`);
+
+    record('重ね', 'どの入力でも例外が出ない', errors.length === 0, errors.slice(0, 1).join(''));
     await ctx.close();
   }
 

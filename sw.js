@@ -12,7 +12,7 @@
  * changing with them — the version is a hash of their contents.
  */
 
-const VERSION = '51abf3d927fb';
+const VERSION = 'bf1d8c07d014';
 const CACHE = `meishiki-${VERSION}`;
 
 const FILES = [
@@ -59,6 +59,7 @@ const FILES = [
   "app/icons/icon-512.png",
   "app/icons/icon-maskable-512.png",
   "app/icons/icon.svg",
+  "app/layers-main.js",
   "app/main.js",
   "app/oracle-main.js",
   "app/ui/board.js",

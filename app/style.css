@@ -1414,3 +1414,87 @@ tr.dominant td, tr.dominant th { color: var(--ink); }
 @media (min-width: 420px) {
   .glyph { font-size: 48px; }
 }
+
+/* --- 重ね（layers.html） -------------------------------------------------- */
+/*
+   Four systems side by side, and the measured agreement above them. The
+   agreement block is the only part given emphasis: the systems are the
+   working, and the number is the answer.
+*/
+.layer {
+  margin-top: 26px;
+  padding-top: 20px;
+  border-top: 1px solid var(--rule);
+}
+.layer-title {
+  font-family: var(--mincho);
+  font-size: 19px;
+  color: var(--brass);
+  letter-spacing: 0.08em;
+  margin: 0 0 6px;
+}
+.layer-lede { font-size: 13.5px; color: var(--ink-dim); margin: 0 0 14px; }
+.layer-row { margin: 14px 0; }
+.layer-value {
+  font-family: var(--mincho);
+  font-size: 17px;
+  color: var(--ink);
+  margin: 0 0 3px;
+}
+.layer-plain { font-size: 13.5px; color: var(--ink-dim); line-height: 1.8; margin: 0 0 6px; }
+/* Boundary notes and refusals: quieter than the answer, never hidden. */
+.layer-edge {
+  font-size: 12px;
+  color: var(--ink-faint);
+  line-height: 1.75;
+  margin: 6px 0 0;
+  padding-left: 10px;
+  border-left: 1px solid var(--rule);
+}
+.layer-split { margin-top: 10px; }
+.layer-share {
+  font-family: var(--mincho);
+  font-size: 14px;
+  color: var(--ink-dim);
+  margin: 4px 0;
+}
+/*
+   A withheld ascendant. Styled at the weight an answer would have had, because
+   "we will not guess this" is the finding, not an apology for a missing field.
+*/
+.layer-absent {
+  font-size: 13px;
+  color: var(--ink-dim);
+  line-height: 1.85;
+  margin: 12px 0 0;
+  padding: 12px 14px;
+  border: 1px dashed var(--rule-strong, var(--rule));
+  border-radius: 3px;
+  background: var(--panel);
+}
+
+.layer-agreement { border-top: none; padding-top: 0; }
+.agreement {
+  margin: 16px 0;
+  padding: 14px 16px;
+  background: var(--panel);
+  border-left: 2px solid var(--brass-faint, var(--rule));
+  border-radius: 2px;
+}
+.agreement-claim { font-size: 14px; color: var(--ink); line-height: 1.8; margin: 0 0 10px; }
+.agreement-numbers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin: 0 0 8px;
+}
+.agreement-observed, .agreement-null, .agreement-lift {
+  font-family: var(--mincho);
+  font-size: 13px;
+  letter-spacing: 0.03em;
+}
+.agreement-observed { color: var(--ink); }
+.agreement-null { color: var(--ink-faint); }
+.agreement-lift { color: var(--brass); }
+.agreement-verdict { font-size: 12.5px; color: var(--ink-dim); line-height: 1.75; margin: 0; }
+.agreement-none { font-size: 13.5px; color: var(--ink-dim); line-height: 1.85; margin: 0; }

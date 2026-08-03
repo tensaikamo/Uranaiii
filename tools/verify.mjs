@@ -1182,13 +1182,49 @@ const DAY_PILLARS = [
         : `未達: ${failures.join(', ')}`);
   }
 
-  // A7 — latitude is not asked for anywhere, because nothing uses it.
+  // A7 — latitude is asked for only where something uses it, and where it is
+  // asked for, the page says what for.
+  //
+  // This check used to read "latitude appears nowhere", which was right while
+  // nothing used it: an input collected on spec is an input collected without
+  // cause, and it was removed for that reason. 重ね now genuinely needs it —
+  // the ascendant cannot be computed without it — so the rule it was really
+  // enforcing has to be stated properly rather than the new page exempted.
+  //
+  // The failure it guards against is unchanged: a form that asks for a
+  // coordinate and leaves the reader to assume it matters everywhere.
   {
-    const files = PAGES.map((p) => p.html).concat(PAGES.map((p) => p.entry).filter(Boolean));
-    const hits = files.filter((f) => readFileSync(join(ROOT, f), 'utf8').includes('latitude'));
-    record('伝え方', '使わない緯度を入力欄に置いていない', hits.length === 0,
-      hits.length === 0 ? `${files.length}ファイルすべてに latitude が無い`
-        : `残っている: ${hits.join(', ')}`);
+    const problems = [];
+    for (const page of PAGES) {
+      const asks = /id="latitude"/.test(page.source);
+      const entry = page.entry ? readFileSync(join(ROOT, page.entry), 'utf8') : '';
+      if (!asks) {
+        // A page that does not ask must not mention it at all — a leftover
+        // reference is how the field creeps back.
+        if (page.source.includes('latitude') || entry.includes('latitude')) {
+          problems.push(`${page.html}: 訊いていないのに latitude が残っている`);
+        }
+        continue;
+      }
+      // Asking is allowed only if the page actually feeds it to the ascendant.
+      if (!entry.includes('latitude')) {
+        problems.push(`${page.html}: 訊いているが ${page.entry} が使っていない`);
+      }
+      // …and only if the field itself says what it is for. The hint has to name
+      // the ascendant, because that is the only thing it affects.
+      const field = page.source.slice(page.source.indexOf('id="latitude"'));
+      const hint = field.slice(0, field.indexOf('</div>'));
+      if (!hint.includes('アセンダント')) {
+        problems.push(`${page.html}: 何に使うのかが欄に書かれていない`);
+      }
+    }
+    const asking = PAGES.filter((p) => /id="latitude"/.test(p.source)).map((p) => p.html);
+    record('伝え方', '緯度は、使うページだけが、使い道を書いた上で訊く',
+      problems.length === 0,
+      problems.length === 0
+        ? `訊いているのは ${asking.join(', ') || 'どのページでもない'}`
+          + `（アセンダント専用と明記）。残る ${PAGES.length - asking.length}ページには一切現れない`
+        : problems.join(' / '));
   }
 
   // A3 — the date field cannot offer a birth that has not happened.

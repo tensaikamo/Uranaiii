@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#070C14">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="app/icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="app/icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="重ね">
+<title>重ね — 命式</title>
+<link rel="stylesheet" href="app/style.css">
+</head>
+<body class="layers-page">
+
+<canvas id="sky" aria-hidden="true"></canvas>
+
+<noscript>
+  <p class="notice">このページは JavaScript で計算します。有効にしてください。</p>
+</noscript>
+
+<header class="masthead">
+  <h1>重ね</h1>
+  <p class="subtitle">四つの占いを同じ生まれに当てて、一致を数える</p>
+</header>
+
+<nav class="tabs" aria-label="ページ">
+  <a href="index.html">盤</a>
+  <a href="voice.html">語り</a>
+  <a href="oracle.html">託宣</a>
+  <a href="layers.html" aria-current="page">重ね</a>
+</nav>
+
+<main>
+
+  <!--
+    The finding, at the entrance.
+
+    Every other multi-system app puts the agreement at the end, as a payoff.
+    Here it goes first, because it is the answer and the four systems below are
+    the working. Putting it last would let the reader accumulate four pages of
+    "wow, they all say 土" before meeting the number that says 土 turns up that
+    often anyway.
+  -->
+  <section class="oath">
+    <p>
+      同じ生まれを、<strong>四柱推命・九星気学・宿曜・西洋占星術・数秘術</strong>で読みます。
+      系統が増えるほど当たる気がしますが、<strong>実際に当たりやすくはなりません。</strong>
+    </p>
+    <p>
+      なので、一致を見つけたら必ず
+      <strong>「それが偶然どれくらい起きるか」</strong>を横に置きます。
+      2万件で測った答えは——<strong>どの2系統も、偶然を超えて一致していません。</strong>
+    </p>
+    <p class="oath-close">
+      それでも読む価値はあります。系統ごとに<strong>見ているものが違う</strong>からです。
+      重なりが意味を持たないだけで、一つ一つは別のことを言っています。
+    </p>
+  </section>
+
+  <div id="boot" class="boot"><p class="boot-line">天体暦を読み込んでいます…</p></div>
+
+  <form id="form" class="panel" hidden>
+    <div class="field">
+      <label for="birthdate">生まれた日</label>
+      <input type="date" id="birthdate" name="birthdate" value="1990-06-15"
+             min="1800-01-01" max="2399-12-31" required>
+    </div>
+
+    <div class="field">
+      <label for="birthtime">生まれた時刻</label>
+      <input type="time" id="birthtime" name="birthtime" value="06:20" step="60">
+      <p class="hint">
+        空でも占えますが、<strong>アセンダントは出せません</strong>（一日で十二星座を一周するため）。
+        宿曜も、時刻が無いとほぼ必ず2つの宿にまたがります。
+      </p>
+    </div>
+
+    <div class="field">
+      <label for="longitude">東経</label>
+      <input type="number" id="longitude" value="141.79" min="122" max="154" step="any" inputmode="decimal" required>
+      <p class="hint">真太陽時のずれを出すのに要ります。入力はどこにも保存されません。</p>
+    </div>
+
+    <!--
+      The latitude was removed once, for the right reason: nothing used it, and
+      an input collected on spec is an input collected without cause. It is back
+      because one thing now genuinely needs it — and the field says which,
+      rather than leaving the reader to assume it matters everywhere.
+    -->
+    <div class="field">
+      <label for="latitude">北緯</label>
+      <input type="number" id="latitude" value="43.20" min="20" max="46" step="any" inputmode="decimal">
+      <p class="hint">
+        <strong>アセンダントにだけ使います。</strong>同じ時刻でも、北にいるか南にいるかで
+        昇ってくる星座が変わるためです。命式・九星・宿曜・数秘術には一切効きません。
+        空でも構いません——その場合アセンダントだけが出ません。
+      </p>
+    </div>
+
+    <button type="submit" class="primary" id="cast">五つで読む</button>
+  </form>
+
+  <div id="output" class="output" hidden></div>
+</main>
+
+<footer class="colophon">
+  <p class="version">
+    <a href="index.html">計算の中身が見える「盤」へ →</a>
+  </p>
+</footer>
+
+<script type="module" src="app/layers-main.js"></script>
+<script>
+if ('serviceWorker' in navigator) {
+  addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js', { scope: './' }).catch((error) => {
+      console.warn('offline cache unavailable:', error);
+    });
+  });
+}
+</script>
+</body>
+</html>
