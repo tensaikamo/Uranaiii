@@ -15,6 +15,7 @@ import { buildChart, DEFAULT_AXES } from './engine/chart.js';
 import { judgeBoth, yearFit } from './engine/strength.js';
 import { luckPeriods, cycleAtAge, ageExact } from './engine/luck.js';
 import { oracle } from './engine/oracle.js';
+import { headline } from './engine/glance.js';
 import { frequencyOf, RARITY_SAMPLES } from './engine/rarity.js';
 import { peopleIn } from './engine/plainwords.js';
 import { japanNow } from './engine/time.js';
@@ -141,6 +142,22 @@ function render(input) {
     seal.append(el('span', 'seal-pillar', p ? p.text : '—'));
   }
   scroll.append(seal);
+
+  // The naming, before the telling.
+  //
+  // 託宣 already speaks in one register and the ◎○△ table would break it — a
+  // symbol grid is a different kind of object from a spoken reading. The
+  // headline is not: naming a thing before pronouncing on it is what an oracle
+  // does. So this page takes the one line and none of the rest.
+  {
+    const head = headline(chart, strength);
+    if (head) {
+      const naming = el('p', 'seal-name');
+      naming.append(el('span', 'seal-phrase', head.phrase));
+      naming.append(el('span', 'seal-type', head.type));
+      scroll.append(naming);
+    }
+  }
 
   const instant = reducedMotion();
   let step = 0;

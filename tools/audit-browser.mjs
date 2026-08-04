@@ -546,6 +546,92 @@ async function main() {
     await ctx.close();
   }
 
+  /* --- 一目で分かる層 ------------------------------------------------------ */
+  {
+    const ctx = await browser.newContext({ viewport: { width: 375, height: 812 } });
+    const tab = await ctx.newPage();
+    const errors = [];
+    tab.on('pageerror', (e) => errors.push(String(e)));
+    await tab.goto(`${BASE}/voice.html`, { waitUntil: 'networkidle' });
+    await cast(tab, { voice: true });
+
+    // The whole point is the order: the scannable layer has to come before the
+    // working, or it is just more page. Checked by document position rather
+    // than by CSS, because position is what a reader experiences.
+    const order = await tab.evaluate(() => {
+      const out = document.getElementById('output');
+      const at = (sel) => {
+        const node = out.querySelector(sel);
+        return node ? [...out.querySelectorAll('*')].indexOf(node) : -1;
+      };
+      return {
+        phrase: at('.hero-phrase'),
+        marks: at('.glance-marks'),
+        today: at('.glance-today'),
+        eras: at('.glance-eras'),
+        board: at('.board-fig'),
+        markRows: out.querySelectorAll('.mark-row').length,
+        eraCells: out.querySelectorAll('.era-cell').length,
+      };
+    });
+    record('一目', '一目の層が命式より前に出る',
+      order.phrase >= 0 && order.marks > order.phrase && order.today > order.marks
+        && order.eras > order.today && order.board > order.eras,
+      `一言 ${order.phrase} → 4つ ${order.marks} → 今日 ${order.today} → 時期 ${order.eras} → 命式 ${order.board}`);
+    record('一目', '4場面と時期の帯が実際に描かれる',
+      order.markRows === 4 && order.eraCells >= 2,
+      `場面 ${order.markRows}行、期 ${order.eraCells}本`);
+
+    // Marks must not be colour alone: each row has to carry a word and an
+    // accessible name. A three-step scale is the easiest place in this app to
+    // have encoded meaning in hue and lost every red-green reader.
+    const readable = await tab.evaluate(() => [...document.querySelectorAll('.mark-row')]
+      .every((r) => r.querySelector('.mark-word')
+        && (r.querySelector('.mark-word').textContent || '').trim().length > 0
+        && (r.getAttribute('aria-label') || '').length > 4));
+    record('一目', '◎○△ が記号だけに頼らず、語と読み上げ名を持つ', readable);
+
+    // 性別なし: the eras need 大運, so they must vanish rather than be invented.
+    await tab.goto(`${BASE}/voice.html`, { waitUntil: 'networkidle' });
+    await tab.waitForSelector('#form:not([hidden])', { timeout: 60000 });
+    await tab.fill('#birthdate', '1990-06-15');
+    await tab.fill('#birthtime', '');
+    await tab.click('button[type=submit]');
+    await tab.waitForSelector('#output:not([hidden])', { timeout: 30000 });
+    await tab.waitForTimeout(700);
+    const spare = await tab.evaluate(() => ({
+      eras: document.querySelectorAll('.glance-eras').length,
+      marks: document.querySelectorAll('.mark-row').length,
+      dash: [...document.querySelectorAll('.mark-row')]
+        .filter((r) => r.querySelector('.mark-glyph').textContent === '—').length,
+      notices: document.querySelectorAll('#output .notice').length,
+    }));
+    record('一目', '時刻も性別も無い記録で、出せないものだけが消える',
+      spare.eras === 0 && spare.marks === 4 && spare.dash >= 1 && spare.notices === 0,
+      `期 ${spare.eras}節（大運が無いので0が正しい）、場面 ${spare.marks}行のうち — が ${spare.dash}`);
+
+    record('一目', 'どの入力でも例外が出ない', errors.length === 0, errors.slice(0, 1).join(''));
+    await ctx.close();
+  }
+
+  /* --- 盤ページは人物評を持たない（置かなかった判断の回帰テスト） ----------- */
+  {
+    const ctx = await browser.newContext({ viewport: { width: 375, height: 812 } });
+    const tab = await ctx.newPage();
+    await tab.goto(`${BASE}/index.html`, { waitUntil: 'networkidle' });
+    await cast(tab, {});
+    // The board page's own rule is that it says nothing about the person. The
+    // at-a-glance layer is entirely person-claims, so putting it here would
+    // have been the largest self-contradiction in the repository. It was
+    // deliberately left off; this is what keeps it off.
+    const leaked = await tab.evaluate(() => ['.hero-phrase', '.glance-marks', '.glance-today',
+      '.glance-eras', '.mark-row'].filter((sel) => document.querySelector(sel)));
+    record('一目', '盤ページには人物評を置いていない', leaked.length === 0,
+      leaked.length === 0 ? '一言も◎○△も時期も出ていない（盤は配置のことしか言わない）'
+        : `漏れている: ${leaked.join(', ')}`);
+    await ctx.close();
+  }
+
   await browser.close();
   server.close();
 

@@ -1498,3 +1498,159 @@ tr.dominant td, tr.dominant th { color: var(--ink); }
 .agreement-lift { color: var(--brass); }
 .agreement-verdict { font-size: 12.5px; color: var(--ink-dim); line-height: 1.75; margin: 0; }
 .agreement-none { font-size: 13.5px; color: var(--ink-dim); line-height: 1.85; margin: 0; }
+
+/* --- 一目で分かる層 -------------------------------------------------------- */
+/*
+   The first screen of 語り. Borrowed formats: an adjective in front of the type
+   name, the four settings as marks, a do/don't for today, and the 大運 folded
+   into named eras.
+
+   Marks never carry meaning in colour alone — the glyph and a word do that, and
+   colour only separates rows. A three-step green/amber/red scale is exactly the
+   encoding a red-green viewer cannot read.
+*/
+.hero-phrase {
+  font-family: var(--mincho);
+  font-size: 17px;
+  color: var(--brass);
+  letter-spacing: 0.04em;
+  line-height: 1.6;
+  margin: 0 0 2px;
+}
+
+.glance-title {
+  font-family: var(--mincho);
+  font-size: 16px;
+  color: var(--brass);
+  letter-spacing: 0.1em;
+  margin: 0 0 8px;
+}
+.glance-marks, .glance-today, .glance-eras {
+  margin-top: 24px;
+  padding-top: 18px;
+  border-top: 1px solid var(--rule);
+}
+
+.mark-list { list-style: none; margin: 12px 0 0; padding: 0; }
+.mark-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 9px 2px;
+  border-bottom: 1px solid var(--rule);
+}
+.mark-row:last-child { border-bottom: none; }
+.mark-glyph {
+  font-family: var(--mincho);
+  font-size: 20px;
+  width: 1.4em;
+  flex: none;
+  text-align: center;
+  color: var(--ink);
+}
+.mark-label { font-size: 14px; color: var(--ink); flex: 1; }
+.mark-word { font-size: 12px; color: var(--ink-faint); flex: none; }
+
+.today-line {
+  font-family: var(--mincho);
+  font-size: 16px;
+  color: var(--ink);
+  line-height: 1.7;
+  margin: 0 0 10px;
+}
+.today-acts { list-style: none; margin: 0 0 10px; padding: 0; }
+.today-acts li {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 6px 0;
+}
+.act-mark {
+  font-family: var(--mincho);
+  font-size: 16px;
+  width: 1.2em;
+  flex: none;
+  text-align: center;
+  color: var(--ink-dim);
+}
+.act-text { font-size: 14px; color: var(--ink); line-height: 1.7; }
+
+/*
+   The era strip. Width is proportional to the length of the era, so a 40-year
+   stretch looks like one; that is the whole reason to draw it rather than list
+   it. Position and label carry the meaning, and the fill is one colour — the
+   band lower down learned this lesson already.
+*/
+.era-strip {
+  display: flex;
+  gap: 3px;
+  margin: 12px 0 10px;
+  min-height: 62px;
+}
+.era-cell {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  /*
+     Proportional width, with a floor. 大運前 can be eight years out of ninety,
+     which at true proportion collapses the label to a single character — the
+     cell stops being readable exactly where a young reader is standing. The
+     floor distorts the shortest eras slightly; the alternative distorted them
+     into nothing.
+  */
+  min-width: 4.6em;
+  padding: 8px 6px;
+  border-radius: 2px;
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  overflow: hidden;
+}
+.era-cell.is-now {
+  border-color: var(--brass);
+  background: rgba(201, 169, 97, 0.12);
+}
+.era-name {
+  font-family: var(--mincho);
+  font-size: 12.5px;
+  color: var(--ink-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.era-cell.is-now .era-name { color: var(--brass); }
+.era-span { font-size: 10.5px; color: var(--ink-faint); white-space: nowrap; }
+.era-now { font-size: 13.5px; color: var(--ink-dim); line-height: 1.8; margin: 0; }
+
+.glance-freq { font-size: 11.5px; color: var(--ink-faint); margin: 6px 0 0; }
+
+/* 吉方位 — rendered inside a 重ね card. */
+.compass-good { list-style: none; margin: 8px 0; padding: 0; }
+.compass-item {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--rule);
+}
+.compass-item:last-child { border-bottom: none; }
+.compass-dir {
+  font-family: var(--mincho);
+  font-size: 16px;
+  color: var(--ink);
+  min-width: 2.6em;
+}
+.compass-star { font-size: 12px; color: var(--brass); }
+.compass-why { font-size: 12px; color: var(--ink-faint); flex-basis: 100%; }
+
+/* 託宣 — the naming, before the telling. */
+.seal-name {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 4px 0 22px;
+  text-align: center;
+}
+.seal-phrase { font-family: var(--mincho); font-size: 15px; color: var(--ink-dim); letter-spacing: 0.06em; }
+.seal-type { font-family: var(--mincho); font-size: 24px; color: var(--brass); letter-spacing: 0.14em; }

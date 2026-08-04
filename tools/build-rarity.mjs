@@ -25,6 +25,9 @@ import { rawStatements } from '../app/engine/reading.js';
 import { voiceStatements } from '../app/engine/voice.js';
 import { domainStatements } from '../app/engine/domains.js';
 import { oracleStatements } from '../app/engine/oracle.js';
+import { glanceStatements } from '../app/engine/glance.js';
+import { elementBalance } from '../app/engine/pillars.js';
+import { timeline } from '../app/engine/timeline.js';
 import { judgeBoth } from '../app/engine/strength.js';
 import { luckPeriods, cycleAtAge, ageExact } from '../app/engine/luck.js';
 import { julianDay } from '../app/engine/swe.js';
@@ -56,6 +59,13 @@ const nowJdUt = julianDay(
 const COUNTED_ON = new Date(now.getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10);
 
 const rnd = sampler(20260729);
+
+/** The element ruling the day the table is counted on. */
+function todayElementOf(chart, strength, input) {
+  const luck = luckPeriods(chart, strength, input.sex);
+  const rows = timeline(input, strength, luck, now).rows;
+  return rows.length ? rows[rows.length - 1].pillar.stemElement : null;
+}
 
 /** The 大運 the reader stands in today — one of the per-scene bullet's materials. */
 function luckNow(chart, strength, input) {
@@ -94,6 +104,14 @@ for (let i = 0; i < SAMPLES; i += 1) {
     ...voiceStatements(chart, nowJdUt, input).map((s) => s.key),
     ...domainStatements(chart, strength, { luckFit: luckNow(chart, strength, input) }).map((s) => s.key),
     ...oracleStatements(chart, strength, { luckFit: luckNow(chart, strength, input) }).map((s) => s.key),
+    // The at-a-glance layer. These are the lines a reader meets first, so they
+    // are the ones that most need a number saying how many other people got
+    // the same one — a headline is exactly the shape a Barnum line takes.
+    ...glanceStatements(chart, strength, elementBalance(chart.pillars), {
+      luck: luckPeriods(chart, strength, input.sex),
+      todayElement: todayElementOf(chart, strength, input),
+      age: ageExact(input, now),
+    }).map((s) => s.key),
   ]);
   for (const key of seen) counts.set(key, (counts.get(key) || 0) + 1);
 }

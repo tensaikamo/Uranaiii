@@ -19,6 +19,8 @@ import { agreements, agreementTally } from './engine/agreement.js';
 import { AGREEMENT_RATES, AGREEMENT_SAMPLES } from './engine/agreementRates.js';
 import { naturalFrequency } from './engine/uncertainty.js';
 import { ELEMENT_NAMES } from './engine/pillars.js';
+import { compass } from './engine/compass.js';
+import { renderCompass } from './ui/glance.js';
 import { japanNow } from './engine/time.js';
 import { calendarDate } from './engine/swe.js';
 import { attachPlaceField } from './ui/placefield.js';
@@ -240,6 +242,16 @@ function kyuseiCard(facts) {
     row.append(el('p', 'layer-plain', star.plain));
     row.append(cites([source, `五行:${ELEMENT_NAMES[star.element]}`]));
     section.append(row);
+  }
+
+  // 吉方位 — rendered here, beside the star it is derived from, rather than in
+  // a section of its own. It is the one thing this whole app produces that a
+  // reader can act on today, and it is九星気学's, not the app's.
+  {
+    const solarYear = japanNow().year;
+    // 年支 from the sexagenary cycle: 甲子 is year 4.
+    const yearBranch = ((solarYear - 4) % 12 + 12) % 12;
+    section.append(renderCompass(compass(solarYear, k.year.number, yearBranch)));
   }
 
   // The boundary is the reason this system is worth computing properly, so the

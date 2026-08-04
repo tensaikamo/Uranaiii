@@ -36,6 +36,9 @@ import { lifePath } from '../app/engine/numerology.js';
 import { comparablePairs, STRUCTURAL } from '../app/engine/agreement.js';
 import { AGREEMENT_RATES, AGREEMENT_SAMPLES, AGREEMENT_COUNTED_ON } from '../app/engine/agreementRates.js';
 import { allSystems } from '../app/engine/systems.js';
+import { headline, marks, eras, eraAt, glanceStatements } from '../app/engine/glance.js';
+import { compass, yearChart } from '../app/engine/compass.js';
+import { elementBalance } from '../app/engine/pillars.js';
 import { PLACES, findPlaces } from '../app/engine/places.js';
 import { speak } from '../app/engine/voice.js';
 import { judgeStrength, judgeBoth } from '../app/engine/strength.js';
@@ -1943,6 +1946,140 @@ const DAY_PILLARS = [
     strays.length === 0,
     strays.length === 0 ? `印は ${Object.keys(STRUCTURAL).length}件、すべて実在の組を指す`
       : `存在しない組を指している: ${strays.join(', ')}`);
+}
+
+// --- 一目で分かる層 -----------------------------------------------------------
+{
+  const rnd = sampler(70707);
+  const sample = (over = {}) => {
+    const input = {
+      year: rnd(1930, 2030), month: rnd(1, 12), day: rnd(1, 28),
+      hour: rnd(0, 23), minute: rnd(0, 59), precision: 'pm5',
+      longitude: 122 + rnd(0, 3200) / 100, sex: rnd(0, 1) ? 'male' : 'female', ...over,
+    };
+    const chart = buildChart(input, DEFAULT_AXES);
+    const strength = judgeBoth(chart.pillars);
+    return { input, chart, strength, balance: elementBalance(chart.pillars) };
+  };
+
+  // 一言 — must exist for every chart, and must be the same every time.
+  let missing = 0;
+  let unsourced = 0;
+  let unstable = 0;
+  const headKeys = new Set();
+  for (let i = 0; i < 600; i += 1) {
+    const { chart, strength } = sample();
+    const head = headline(chart, strength);
+    if (!head) { missing += 1; continue; }
+    if (!head.source || head.source.length === 0) unsourced += 1;
+    if (headline(chart, strength).text !== head.text) unstable += 1;
+    headKeys.add(head.key);
+  }
+  record('一目', '一言がどの盤でも出て、出典を持ち、何度出しても同じ',
+    missing === 0 && unsourced === 0 && unstable === 0,
+    `600命式、出ない ${missing}件／出典なし ${unsourced}件／揺れ ${unstable}件、${headKeys.size}通り`);
+
+  // ◎○△ — the marks rank within a chart, so they must actually spread. The
+  // first version compared against 用神 absolutely and gave 76% of everybody a
+  // △ on 仕事; this is the check that would have caught it.
+  const perDomain = { work: {}, people: {}, money: {}, body: {} };
+  const rows = new Map();
+  const N = 3000;
+  for (let i = 0; i < N; i += 1) {
+    const { chart, strength, balance } = sample();
+    const list = marks(chart, strength, balance);
+    const row = list.map((m) => m.mark).join('');
+    rows.set(row, (rows.get(row) || 0) + 1);
+    for (const m of list) perDomain[m.key][m.mark] = (perDomain[m.key][m.mark] || 0) + 1;
+  }
+  const worstShare = Math.max(...Object.values(perDomain)
+    .flatMap((counts) => Object.values(counts).map((n) => n / N)));
+  const commonestRow = [...rows.entries()].sort((a, b) => b[1] - a[1])[0];
+  record('一目', '◎○△ が偏らない（どの場面のどの記号も過半に達しない）',
+    worstShare < 0.5,
+    `${N}命式、最も偏った記号でも ${(worstShare * 100).toFixed(0)}%。`
+      + `最頻の並びは ${commonestRow[0]} が ${(commonestRow[1] / N * 100).toFixed(1)}%`
+      + `（絶対評価だった頃は 仕事の△ が 76%、△△△△ が 16%）`);
+
+  // A timeless record has no 時支, so 心と体 must decline rather than guess.
+  {
+    const { chart, strength, balance } = sample({ precision: 'unknown' });
+    const body = marks(chart, strength, balance).find((m) => m.key === 'body');
+    record('一目', '時刻の無い記録では「心と体」が判定を出さない',
+      body.mark === '—' && body.element === null,
+      `記号 ${body.mark}、担当五行 ${body.element === null ? 'なし' : body.element}`);
+  }
+
+  // 時期 — the eras must tile a life with no gap and no overlap, including the
+  // years before 立運, which belong to no 大運 at all.
+  let gaps = 0;
+  let overlaps = 0;
+  let uncovered = 0;
+  for (let i = 0; i < 400; i += 1) {
+    const { chart, strength, input } = sample();
+    const list = eras(luckPeriods(chart, strength, input.sex));
+    if (list.length === 0) continue;
+    if (list[0].fromAge !== 0) uncovered += 1;
+    for (let k = 1; k < list.length; k += 1) {
+      if (Math.abs(list[k].fromAge - list[k - 1].toAge) > 1e-9) {
+        if (list[k].fromAge > list[k - 1].toAge) gaps += 1; else overlaps += 1;
+      }
+    }
+    // Every age in range lands in exactly one era.
+    for (const age of [0, 7, 23, 44, 61, 88]) {
+      if (age < list[list.length - 1].toAge
+        && list.filter((e) => age >= e.fromAge && age < e.toAge).length !== 1) uncovered += 1;
+    }
+  }
+  record('一目', '時期が人生を隙間なく覆い、重ならない（立運前も含めて）',
+    gaps === 0 && overlaps === 0 && uncovered === 0,
+    `400命式、隙間 ${gaps}／重なり ${overlaps}／どの期にも属さない年齢 ${uncovered}`);
+
+  // 大運 needs a sex; without one there are no eras rather than invented ones.
+  {
+    const { chart, strength, input } = sample();
+    record('一目', '性別を答えないと時期を出さない（作らない）',
+      eras(luckPeriods(chart, strength, null)).length === 0,
+      '大運が出せない記録では期も出さない');
+  }
+}
+
+// --- 吉方位 -------------------------------------------------------------------
+{
+  // The rotation, against a published year. 2026 has 一白 at the centre, which
+  // puts 五黄 in the south and 暗剣殺 in the north — the value 九星気学 sources
+  // publish for 2026. An off-by-one in the rotation cannot land on it by luck.
+  const chart2026 = yearChart(2026);
+  const five = chart2026.palaces.find((p) => p.star.number === 5);
+  const dark = chart2026.palaces.find((p) => p.key === five.opposite);
+  record('吉方位', '年盤の回転が公表値と一致する（2026年 五黄殺＝南／暗剣殺＝北）',
+    chart2026.centre === 1 && five.name === '南' && dark.name === '北',
+    `2026年 中宮=${chart2026.centreStar.name}、五黄殺=${five.name}、暗剣殺=${dark.name}`);
+
+  // Eight palaces, eight different stars, every year.
+  let broken = 0;
+  for (let year = 1900; year < 2100; year += 1) {
+    const stars = new Set(yearChart(year).palaces.map((p) => p.star.number));
+    if (stars.size !== 8) broken += 1;
+  }
+  record('吉方位', 'どの年でも8方位に8つの星が重複なく並ぶ',
+    broken === 0, `1900〜2099年の200年、重複や欠けが ${broken}件`);
+
+  // A direction is never both. 五黄 is nobody's 吉 whatever the element says,
+  // and that exception is the one every school agrees on.
+  let contradictions = 0;
+  let fiveYellowGood = 0;
+  for (let star = 1; star <= 9; star += 1) {
+    for (let year = 2020; year < 2040; year += 1) {
+      for (const palace of compass(year, star, (year - 4 + 12) % 12).palaces) {
+        if (palace.good && palace.bad.length > 0) contradictions += 1;
+        if (palace.good && palace.star.number === 5) fiveYellowGood += 1;
+      }
+    }
+  }
+  record('吉方位', '吉と凶が同じ方位に同時に立たない／五黄は誰の吉にもならない',
+    contradictions === 0 && fiveYellowGood === 0,
+    `9星 × 20年 × 8方位 = 1,440通り、矛盾 ${contradictions}件、五黄が吉 ${fiveYellowGood}件`);
 }
 
 // --- 図と CSS の後始末 --------------------------------------------------------

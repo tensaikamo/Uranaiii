@@ -30,6 +30,9 @@ import { buildLuckBand } from './ui/luckband.js';
 import { elementBalance } from './engine/pillars.js';
 import { FIT_LABEL } from './engine/timeline.js';
 import { frequencyOf, RARITY_SAMPLES } from './engine/rarity.js';
+import { headline, marks, eras, eraAt, todayActions } from './engine/glance.js';
+import { renderHeadline, renderMarks, renderEras, renderToday } from './ui/glance.js';
+import { luckPeriods, ageExact } from './engine/luck.js';
 import { el } from './ui/render.js';
 import { startSky } from './ui/sky.js';
 import { japanNow } from './engine/time.js';
@@ -286,9 +289,16 @@ function render(input) {
   const v = speak(chart, nowJdUt, input);
   const s = v.strength;
 
-  /* --- 名前 --- */
+  /* --- 名前 ---
+     The type name gains an adjective phrase in front of it. 「夏の宝石」 is a
+     noun and does not tell anyone what to do with it; 「積み上げて強くなる —
+     夏の宝石」 is the engine's own conclusion said in four words, and it is the
+     line people repeat. Both halves come from values already computed, so this
+     is a change of presentation and not of claim. */
+  const head = headline(chart, s);
   const hero = el('div', 'hero');
   hero.append(el('p', 'hero-eyebrow', 'あなたは'));
+  if (head) hero.append(el('p', 'hero-phrase', head.phrase));
   hero.append(el('p', 'hero-name', v.type.name));
   hero.append(el('p', 'hero-tag', v.type.tag));
 
@@ -301,12 +311,43 @@ function render(input) {
   // The one sentence to leave with, before any of the arithmetic.
   hero.append(el('p', 'hero-line', `一行で言うと——${v.verdict.lead}`));
 
-  const share = peopleIn(frequencyOf(v.type.key), RARITY_SAMPLES);
+  // The frequency belongs to the line as displayed — phrase and type together,
+  // since that is what a reader takes away. The type's own share is still shown
+  // beside it, because "one of forty types" is the number that makes the first
+  // one legible.
+  const share = peopleIn(frequencyOf(head ? head.key : v.type.key), RARITY_SAMPLES);
+  const typeShare = peopleIn(frequencyOf(v.type.key), RARITY_SAMPLES);
   if (share) {
     hero.append(el('p', 'hero-freq',
-      `このタイプは ${share}（${RARITY_SAMPLES.toLocaleString('ja-JP')}人ぶんを実際に数えた結果。全40タイプ）`));
+      `この一行がそのまま出るのは ${share}`
+      + (typeShare ? `。型だけなら ${typeShare}（全40タイプ）` : '')
+      + `。${RARITY_SAMPLES.toLocaleString('ja-JP')}人ぶんを実際に数えた結果です`));
   }
   output.append(hero);
+
+  /* --- 一目で分かる層 ---
+     Three formats borrowed from divination people actually read: the four
+     settings as marks, today as a do and a don't, and the 大運 folded into
+     named eras. They go here, above the 命式, because the complaint this
+     answers was that the page never says what it is telling you. Everything
+     below is unchanged — the working stays, it just stops being the opening. */
+  {
+    const balance = elementBalance(chart.pillars);
+    output.append(renderMarks(marks(chart, s, balance)));
+
+    const rows = v.when.rows;
+    const todayRow = rows[rows.length - 1];
+    const today = todayActions(s, todayRow.pillar.stemElement);
+    const todayBlock = renderToday(today,
+      today ? peopleIn(frequencyOf(today.key), RARITY_SAMPLES) : null);
+    if (todayBlock) output.append(todayBlock);
+
+    // 大運 needs a sex to be computed at all, so a reader who did not give one
+    // gets no eras rather than eras built on a guess.
+    const luck = luckPeriods(chart, s, input.sex);
+    const eraBlock = renderEras(eras(luck), luck ? ageExact(input, now) : null);
+    if (eraBlock) output.append(eraBlock);
+  }
 
   /* --- 命式 — the most important object on the page, drawn as a board --- */
   output.append(buildBoardFigure(chart));
